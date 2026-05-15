@@ -27,7 +27,7 @@ import {
   type InsertReview,
   type PaymentMethod,
   type InsertPaymentMethod,
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 // Storage interface for DB-backed operations
 export interface IStorage {

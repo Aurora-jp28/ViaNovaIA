@@ -7,7 +7,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { getDb } from "../storage";
+import { getDb } from "../storage.js";
 import {
   createRide,
   getRideById,
@@ -32,7 +32,7 @@ import {
   patchRideSchema,
   taxiStatusSchema,
   withdrawSchema,
-} from "@shared/taxi.schema";
+} from "../../shared/taxi.schema.js";
 
 export function registerTaxiRoutes(app: Express): void {
 

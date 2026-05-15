@@ -1,16 +1,16 @@
 import "dotenv/config";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage, getDb } from "../storage";
-import { registerTaxiRoutes } from "./taxi.routes";
+import { storage, getDb } from "../storage.js";
+import { registerTaxiRoutes } from "./taxi.routes.js";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { z } from "zod";
-import { insertServiceSchema, insertCommentSchema, comments } from "@shared/schema";
+import { insertServiceSchema, insertCommentSchema, comments } from "../../shared/schema.js";
 import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail } from "../mailer";
+import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail } from "../mailer.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 

@@ -14,7 +14,7 @@ import {
   type Withdrawal,
   type InsertRide,
   type InsertWithdrawal,
-} from "@shared/taxi.schema";
+} from "../shared/taxi.schema.js";
 
 // ── RIDES ─────────────────────────────────────────────────────────────────────
 
