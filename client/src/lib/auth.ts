@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type UserRole = 'hotel' | 'restaurant' | 'recreation' | 'taxi' | 'traveler';
+export type UserRole = 'hotel' | 'restaurant' | 'recreation' | 'taxi' | 'traveler' | 'translator';
 
 export interface User {
   username: string;
@@ -114,6 +114,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   logout: () => {
     localStorage.removeItem('user');
     set({ user: null, isAuthenticated: false });
+    // Clear all cached query data so no user A data leaks to user B
+    import('./queryClient').then(({ queryClient }) => queryClient.clear());
   },
 
   forgotPassword: async (email: string) => {

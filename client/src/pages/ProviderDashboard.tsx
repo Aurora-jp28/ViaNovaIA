@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Car, Utensils, TentTree, Save, MapPin, Image as ImageIcon, Camera } from "lucide-react";
+import { Building2, Car, Utensils, TentTree, Save, MapPin, Image as ImageIcon, Camera, Languages } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 
@@ -32,6 +32,7 @@ export default function ProviderDashboard() {
       case 'restaurant': return 'restaurant';
       case 'recreation': return 'recreation';
       case 'taxi': return 'transport';
+      case 'translator': return 'otros';
       default: return 'recreation';
     }
   };
@@ -62,6 +63,7 @@ export default function ProviderDashboard() {
       case 'restaurant': return <Utensils className="h-6 w-6 text-orange-400" />;
       case 'recreation': return <TentTree className="h-6 w-6 text-green-400" />;
       case 'taxi': return <Car className="h-6 w-6 text-yellow-400" />;
+      case 'translator': return <Languages className="h-6 w-6 text-teal-400" />;
       default: return null;
     }
   };
@@ -72,6 +74,7 @@ export default function ProviderDashboard() {
       case 'restaurant': return 'Gestión del Restaurante';
       case 'recreation': return 'Gestión de Sitio Recreativo';
       case 'taxi': return 'Perfil de Conductor';
+      case 'translator': return 'Panel de Traductor';
       default: return 'Panel de Control';
     }
   };

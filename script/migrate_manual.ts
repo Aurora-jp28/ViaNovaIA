@@ -43,6 +43,24 @@ async function main() {
     console.log("Error creating 'comments' table:", err.message);
   }
 
+  console.log("Creating 'notifications' table if missing...");
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_username text NOT NULL,
+        traveler_username text,
+        type text NOT NULL,
+        details text NOT NULL,
+        is_read text DEFAULT 'false',
+        created_at timestamp DEFAULT now()
+      );
+    `;
+    console.log("Created 'notifications' table.");
+  } catch (err: any) {
+    console.log("Error creating 'notifications' table:", err.message);
+  }
+
   console.log("Migration script finished successfully.");
 }
 

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth, UserRole } from "@/lib/auth";
-import { LogOut, User, Settings, Package, Building2, Utensils, TentTree, Car, Clock } from "lucide-react";
+import { LogOut, User, Settings, Package, Building2, Utensils, TentTree, Car, Clock, Languages, Globe, Compass } from "lucide-react";
 import logoImg from "../assets/logo.jpeg";
 import {
   DropdownMenu,
@@ -23,6 +23,7 @@ export default function Navbar() {
       case 'restaurant': return <Utensils className="h-4 w-4 text-orange-400" />;
       case 'recreation': return <TentTree className="h-4 w-4 text-green-400" />;
       case 'taxi': return <Car className="h-4 w-4 text-yellow-400" />;
+      case 'translator': return <Languages className="h-4 w-4 text-teal-400" />;
       default: return <User className="h-4 w-4 text-blue-400" />;
     }
   };
@@ -33,6 +34,7 @@ export default function Navbar() {
       case 'restaurant': return 'Restaurante';
       case 'recreation': return 'Recreación';
       case 'taxi': return 'Taxista';
+      case 'translator': return 'Traductor';
       default: return 'Viajero';
     }
   };
@@ -63,8 +65,41 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                onClick={() => setLocation("/explore")}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  location === "/explore"
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "border-transparent text-muted-foreground hover:text-primary hover:bg-primary/5"
+                }`}
+              >
+                <Compass className="h-3.5 w-3.5" /> Explorar
+              </button>
+              <button
+                onClick={() => setLocation("/social")}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  location === "/social"
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "border-transparent text-muted-foreground hover:text-primary hover:bg-primary/5"
+                }`}
+              >
+                <Globe className="h-3.5 w-3.5" /> Social
+              </button>
+            </div>
           {user ? (
             <div className="flex items-center gap-4">
+              {isProvider && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="rounded-full relative"
+                  onClick={() => setLocation("/notifications")}
+                >
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bell"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                </Button>
+              )}
               <div className="hidden md:flex flex-col items-end">
                 <span className="text-sm font-medium text-foreground">
                   {user.name || user.username}
@@ -95,15 +130,20 @@ export default function Navbar() {
                     Configuración de Cuenta
                   </DropdownMenuItem>
 
+                  <DropdownMenuItem onClick={() => setLocation("/social")} className="cursor-pointer gap-2">
+                    <Globe className="h-4 w-4 text-primary" />
+                    ViaSocial
+                  </DropdownMenuItem>
+
                   <DropdownMenuItem onClick={() => setLocation("/ride-history")} className="cursor-pointer gap-2">
                     <Clock className="h-4 w-4 text-primary" />
                     Historial de Viajes
                   </DropdownMenuItem>
                   
                   {isProvider && (
-                    <DropdownMenuItem onClick={() => setLocation("/my-products")} className="cursor-pointer gap-2">
+                    <DropdownMenuItem onClick={() => setLocation("/products")} className="cursor-pointer gap-2">
                       <Package className="h-4 w-4 text-primary" />
-                      Administrar Productos
+                      Mis Productos
                     </DropdownMenuItem>
                   )}
 

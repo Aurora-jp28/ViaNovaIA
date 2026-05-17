@@ -10,7 +10,7 @@ import { insertServiceSchema, insertCommentSchema, comments } from "../../shared
 import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail } from "../mailer.js";
+import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail, sendCustomEmail } from "../mailer.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -576,16 +576,67 @@ export async function registerRoutes(
         END $$;
       `);
 
-      res.json({ success: true, message: "Tablas y columnas migradas exitosamente (roles, email, tokens, role_changed_at)" });
+      // Add 'translator' to user_role enum if not already present
+      await db.execute(drizzleSql`
+        DO $$ BEGIN
+          ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'translator';
+        EXCEPTION
+          WHEN duplicate_object THEN null;
+        END $$;
+      `);
+
+      // Create chat_messages table for persistent chatbot history (isolated by userId)
+      await db.execute(drizzleSql`
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          role text NOT NULL CHECK (role IN ('user', 'assistant')),
+          content text NOT NULL,
+          image text,
+          created_at timestamp DEFAULT now()
+        );
+      `);
+
+      // Create index for fast per-user queries
+      await db.execute(drizzleSql`
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id, created_at DESC);
+      `);
+
+      res.json({ success: true, message: "Tablas y columnas migradas exitosamente (roles, email, tokens, role_changed_at, translator, chat_messages)" });
     } catch (err) {
       next(err);
     }
   });
 
-  // Groq chat endpoint
+  // Groq chat endpoints
+  app.get("/api/chat/history", async (req, res, next) => {
+    try {
+      const username = req.query.username as string;
+      if (!username) return res.status(401).json({ message: "Usuario no autenticado" });
+
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const conversation = await storage.upsertConversation(user.id);
+      // getMessages already returns chronological order (reversed inside storage)
+      const msgs = await storage.getMessages(conversation.id, 60);
+      // Normalize to the shape the RideHistory page expects
+      const normalized = msgs.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        image: m.metadata?.image ?? null,
+        createdAt: m.createdAt,
+      }));
+      res.json(normalized);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.post("/api/chat", async (req, res, next) => {
     try {
-      const { userId, username, message, name, location } = req.body || {};
+      const { userId, username, message, name, location, history, destinationCity } = req.body || {};
       if (!message) return res.status(400).json({ message: "message required" });
 
       // Ensure we have a valid user id in DB (FK-safe)
@@ -602,9 +653,69 @@ export async function registerRoutes(
       }
 
       const conversation = await storage.upsertConversation(uid);
+      // Save message to DB for persistence (long-term log)
       await storage.addMessage(conversation.id, "user", message, { location });
 
-      const sysPrompt = `Eres VIANova, un asistente general amable y profesional. Siempre te refieres al usuario por su nombre si está disponible. No uses lenguaje soez. Puedes recomendar hoteles, comidas y actividades basadas en la ubicación del usuario (lat, lng). Responde en español de forma concisa.`;
+      // ── Detectar ciudad destino en el historial para inyectar servicios reales ──
+      const COLOMBIAN_CITIES = ["cali","neiva","medellín","medellin","cartagena","santa marta","bogotá","bogota","bucaramanga","barranquilla","manizales","pereira","armenia","ibagué","ibague","villavicencio","pasto","montería","monteria"];
+      const allText = [message, ...((Array.isArray(history) ? history : []).map((m: any) => m.content || ""))].join(" ").toLowerCase();
+      // Opción B (explícita) tiene prioridad sobre Opción A (inferida)
+      const detectedCity = destinationCity 
+        ? destinationCity.toLowerCase() 
+        : (COLOMBIAN_CITIES.find(c => allText.includes(c)) ?? "");
+      let servicesContext = "";
+      if (detectedCity) {
+        try {
+          const cityServices = await storage.listServicesByCity(detectedCity);
+          if (cityServices.length > 0) {
+            const fmt = (category: string, emoji: string) =>
+              cityServices
+                .filter((s: any) => s.category === category)
+                .map((s: any) => `  ${emoji} **${s.name}** (@${s.provider_username ?? s.providerUsername}) — $${Number(s.price ?? 0).toLocaleString("es-CO")} COP ⭐${s.rating ?? "?"} — ${s.description?.substring(0, 80) ?? ""}`)
+                .join("\n");
+            servicesContext = `\n\n**SERVICIOS REALES DISPONIBLES EN ${detectedCity.toUpperCase()} (usa SOLO estos):**\n` +
+              fmt("hotel", "🏨") + "\n" + fmt("restaurant", "🍽") + "\n" + fmt("recreation", "🎭") + "\n" + fmt("transport", "🚕");
+          }
+        } catch (e) { /* non-blocking */ }
+      }
+
+      const sysPrompt = `Eres VIANova, un conserje inteligente y experto planificador de viajes para Colombia y el mundo. Tu tono es amable, profesional y directo.
+
+**REGLAS CRÍTICAS DE COMPORTAMIENTO:**
+1. **NO saludes en cada mensaje.** Saluda ÚNICAMENTE si el usuario acaba de iniciar la conversación (primer mensaje). Si ya hay historial, responde directamente sin "¡Hola!", "¡Bienvenido!" ni saludos similares.
+2. **LEE SIEMPRE el historial completo antes de responder.** Si el usuario ya indicó su ciudad de origen, destino, presupuesto, duración o preferencias — NO las pidas de nuevo. Usa la información que ya existe.
+3. **NO hagas preguntas redundantes.** Si ya conoces el destino, presupuesto y duración, pasa directamente a planificar.
+4. **Responde de forma concisa.** Máximo 3-4 párrafos por respuesta.
+5. **Usa los servicios reales de VIANova** cuando estén disponibles abajo. Menciona sus nombres, precios y usuario (@) exactamente como aparecen.
+
+**MANEJO DE UBICACIÓN:**
+- Si se proporciona una ubicación GPS (lat, lng), úsala como referencia.
+- Si el usuario menciona explícitamente su ciudad, **usa esa ciudad**.
+- Solo pregunta la ubicación si es estrictamente necesaria y no fue mencionada antes.
+
+**PROCESO DE PLANIFICACIÓN DE VIAJES:**
+Cuando el usuario quiera planear un viaje, sigue estos pasos EN ORDEN y SIN REPETIR los que ya completaste:
+1. **Recolección:** Necesitas: presupuesto, destino, duración y preferencias. Si ya los tienes del historial, ve directo al paso 2.
+2. **Propuesta:** Diseña un plan detallado usando los servicios reales de VIANova (con precios exactos) dentro del presupuesto. Incluye costos desglosados (vuelo, hotel/noche, comidas, transporte, actividades).
+3. **Confirmación:** Pregunta si el usuario aprueba el plan.
+4. **Cronograma:** Si el usuario ACEPTA, genera las solicitudes en este formato exacto:
+
+### SOLICITUDES DE RESERVA:
+- [HOTEL]: Hospedaje del [Fecha inicio] al [Fecha fin] para [Nombre] en [Hotel sugerido] — $[precio] COP — @[username]
+- [RESTAURANTE]: [Tipo de comida] para [Nombre] el [Fecha] a las [Hora] en [Restaurante] — $[precio] COP — @[username]
+- [TAXI]: Recorrido de [Origen] a [Destino] para [Nombre] el [Fecha] a las [Hora] con [Servicio] — $[precio] COP — @[username]
+- [RECREACION]: [Actividad] para [Nombre] el [Fecha] — $[precio] COP — @[username]
+- [TRADUCTOR]: (Solo si el destino requiere otro idioma) Guía/traductor en [Idioma] para [Nombre].${servicesContext}`;
+
+      // ── Usar historial del frontend — IMPORTANTE: Groq requiere que empiece con 'user' ──
+      // Filter to user/assistant only, then drop any leading 'assistant' messages
+      // because the OpenAI/Groq API requires the first non-system message to be 'user'.
+      const rawHistory: { role: "user" | "assistant"; content: string }[] = Array.isArray(history)
+        ? history.filter((m: any) => m.role === "user" || m.role === "assistant")
+        : [];
+      const firstUserIdx = rawHistory.findIndex(m => m.role === "user");
+      const historyMessages = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
+      const turnCount = historyMessages.length;
 
       const groqKey = process.env.GROQ_API_KEY;
       const completion = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -614,15 +725,23 @@ export async function registerRoutes(
           Authorization: `Bearer ${groqKey}`,
         },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
+          model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: sysPrompt },
             name ? { role: "system", content: `Nombre del usuario: ${name}` } : undefined,
-            location ? { role: "system", content: `Ubicación: ${JSON.stringify(location)}` } : undefined,
+            // GPS location: authoritative when provided (map works = GPS works)
+            location
+              ? { role: "system", content: `Ubicación GPS del usuario (CONFIABLE): lat=${(location as any).lat}, lng=${(location as any).lng}. Usa esta ubicación para tus recomendaciones.` }
+              : { role: "system", content: `Ubicación GPS: No disponible. No asumas ninguna ciudad hasta que el usuario la indique.` },
+            // Dynamic turn counter to suppress greetings on ongoing conversations
+            turnCount > 0
+              ? { role: "system", content: `Esta conversación ya lleva ${turnCount} mensajes. NO saludes al usuario. Continúa el hilo directamente usando el historial.` }
+              : undefined,
+            ...historyMessages,
             { role: "user", content: message },
           ].filter(Boolean),
-          temperature: 0.6,
-          max_tokens: 600,
+          temperature: 0.3,
+          max_tokens: 1024,
         }),
       });
 
@@ -631,6 +750,88 @@ export async function registerRoutes(
 
       const assistantMsg = await storage.addMessage(conversation.id, "assistant", content);
       res.json({ reply: assistantMsg.content, conversationId: conversation.id });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ── Confirmar reservas y notificar a proveedores ───────────────────────────
+  app.post("/api/bookings/confirm", async (req, res, next) => {
+    try {
+      const { bookings, travelerName, travelerEmail } = req.body || {};
+      if (!Array.isArray(bookings) || bookings.length === 0) {
+        return res.status(400).json({ message: "bookings array required" });
+      }
+
+      const results: { type: string; provider: string; status: string }[] = [];
+
+      for (const booking of bookings) {
+        const { type, providerUsername, details } = booking;
+        if (!providerUsername) { results.push({ type, provider: "unknown", status: "skipped" }); continue; }
+
+        // Look up provider email
+        const providerUser = await storage.getUserByUsername(providerUsername);
+        if (!providerUser?.email) { results.push({ type, provider: providerUsername, status: "no_email" }); continue; }
+
+        // Insert into notifications table (In-App notification)
+        try {
+          await storage.insertNotification({
+            providerUsername,
+            travelerUsername: travelerName || "Viajero Anónimo",
+            type,
+            details,
+          });
+        } catch (dbErr) {
+          console.error("Failed to insert notification", dbErr);
+        }
+
+        // Send email to provider
+        try {
+          await sendCustomEmail({
+            to: providerUser.email,
+            subject: `🧳 Nueva Solicitud de Reserva VIANova — ${travelerName || "Turista"}`,
+            html: `
+              <div style="font-family:Inter,sans-serif;max-width:600px;margin:auto;padding:24px;background:#0f172a;color:#e2e8f0;border-radius:12px;">
+                <h2 style="color:#22c55e;">🌍 Nueva Reserva en VIANova</h2>
+                <p>Tienes una nueva solicitud de <strong>${travelerName || "un viajero"}</strong>.</p>
+                <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
+                  <p><strong>Tipo:</strong> ${type}</p>
+                  <p><strong>Detalles:</strong> ${details}</p>
+                  ${travelerEmail ? `<p><strong>Contacto del viajero:</strong> ${travelerEmail}</p>` : ""}
+                </div>
+                <p style="color:#94a3b8;font-size:12px;">Responde directamente a este correo para confirmar la reserva.</p>
+                <p style="color:#94a3b8;font-size:12px;margin-top:16px;">También puedes ver esta notificación en tu panel de VIANova.</p>
+              </div>
+            `,
+          });
+          results.push({ type, provider: providerUsername, status: "sent" });
+        } catch (mailErr: any) {
+          results.push({ type, provider: providerUsername, status: `mail_error: ${mailErr.message}` });
+        }
+      }
+
+      res.json({ message: "Reservas procesadas", results });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ── Endpoints de Notificaciones In-App ────────────────────────────────────
+  app.get("/api/notifications", async (req, res, next) => {
+    try {
+      const username = req.query.username as string;
+      if (!username) return res.status(401).json({ message: "No autenticado" });
+      const notifications = await storage.getProviderNotifications(username);
+      res.json(notifications);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", async (req, res, next) => {
+    try {
+      await storage.markNotificationAsRead(req.params.id);
+      res.sendStatus(200);
     } catch (err) {
       next(err);
     }
@@ -698,10 +899,10 @@ export async function registerRoutes(
   app.post("/api/users/:username/roles", async (req, res, next) => {
     try {
       const { username } = req.params;
-      const { role, businessName, businessAddress, businessPhone, vehicleType, plate, phone } = req.body || {};
+      const { role, businessName, businessAddress, businessPhone, vehicleType, plate, phone, languages } = req.body || {};
       if (!role) return res.status(400).json({ message: "role es obligatorio" });
 
-      const validRoles = ["traveler", "hotel", "restaurant", "recreation", "taxi"];
+      const validRoles = ["traveler", "hotel", "restaurant", "recreation", "taxi", "translator"];
       if (!validRoles.includes(role)) return res.status(400).json({ message: "Rol inválido" });
 
       const user = await storage.getUserByUsername(username);
@@ -712,7 +913,7 @@ export async function registerRoutes(
         role,
         businessName: businessName || null,
         businessAddress: businessAddress || null,
-        businessPhone: businessPhone || null,
+        businessPhone: businessPhone || languages || null, // reuse businessPhone to store languages for translator
         vehicleType: vehicleType || null,
         plate: plate || null,
         phone: phone || null,
@@ -915,6 +1116,603 @@ export async function registerRoutes(
     } catch (err) {
       next(err);
     }
+  });
+
+  // ── E-COMMERCE: Productos y Órdenes ───────────────────────────────────────
+
+  // GET /api/products?category=hotel&page=1&limit=12
+  app.get("/api/products", async (req, res, next) => {
+    try {
+      const db = getDb();
+      const category = req.query.category as string | undefined;
+      const limit = Math.min(parseInt(String(req.query.limit || "12")), 50);
+      const offset = parseInt(String(req.query.offset || "0"));
+
+      const rows = await db.execute(drizzleSql`
+        SELECT p.*, u.avatar_url, u.name AS provider_name
+        FROM products p
+        JOIN users u ON u.id = p.provider_id
+        WHERE p.is_active = true
+        ${category ? drizzleSql`AND p.role_category = ${category}` : drizzleSql``}
+        ORDER BY p.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+      const products = (rows as any).rows ?? (rows as any) ?? [];
+
+      const countRow = await db.execute(drizzleSql`
+        SELECT COUNT(*) as total FROM products
+        WHERE is_active = true
+        ${category ? drizzleSql`AND role_category = ${category}` : drizzleSql``}
+      `);
+      const total = parseInt(((countRow as any).rows ?? (countRow as any))[0]?.total ?? "0");
+
+      res.json({ products, total, hasMore: offset + limit < total });
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/products/provider/:username
+  app.get("/api/products/provider/:username", async (req, res, next) => {
+    try {
+      const db = getDb();
+      const rows = await db.execute(drizzleSql`
+        SELECT p.*, 
+               (SELECT json_agg(m ORDER BY m.sort_order ASC) 
+                FROM media_assets m WHERE m.entity_id = p.id AND m.entity_type = 'product') AS media
+        FROM products p
+        WHERE p.provider_username = ${req.params.username}
+        ORDER BY p.created_at DESC
+      `);
+      res.json({ products: (rows as any).rows ?? (rows as any) ?? [] });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/products — create product with cover image
+  app.post("/api/products", upload.single("coverImage"), async (req, res, next) => {
+    try {
+      configureCloudinary();
+      const { username, name, description, price, currency, stock, roleCategory } = req.body || {};
+      if (!username || !name || !price) {
+        return res.status(400).json({ message: "username, name y price son obligatorios" });
+      }
+
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      let coverImage: string | null = null;
+      if (req.file) {
+        const result: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "vianova/products", quality: "auto:good" },
+            (err, result) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        coverImage = result.secure_url;
+      } else if (req.body.coverImage) {
+        coverImage = req.body.coverImage;
+      }
+
+      const db = getDb();
+      const inserted = await db.execute(drizzleSql`
+        INSERT INTO products (provider_id, provider_username, role_category, name, description, price, currency, stock, cover_image)
+        VALUES (${user.id}, ${username}, ${roleCategory || user.role}, ${name}, ${description || null},
+                ${parseFloat(price)}, ${currency || 'COP'}, ${parseInt(stock || '-1')}, ${coverImage})
+        RETURNING *
+      `);
+      const product = ((inserted as any).rows ?? (inserted as any))[0];
+      res.json({ product });
+    } catch (err) { next(err); }
+  });
+
+  // PATCH /api/products/:id — update product
+  app.patch("/api/products/:id", upload.single("coverImage"), async (req, res, next) => {
+    try {
+      configureCloudinary();
+      const { username, name, description, price, currency, stock, isActive } = req.body || {};
+      if (!username) return res.status(400).json({ message: "username requerido" });
+
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      let coverImage: string | undefined = undefined;
+      if (req.file) {
+        const result: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "vianova/products", quality: "auto:good" },
+            (err, result) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        coverImage = result.secure_url;
+      }
+
+      const db = getDb();
+      await db.execute(drizzleSql`
+        UPDATE products SET
+          name        = COALESCE(${name || null}, name),
+          description = COALESCE(${description || null}, description),
+          price       = COALESCE(${price ? parseFloat(price) : null}, price),
+          currency    = COALESCE(${currency || null}, currency),
+          stock       = COALESCE(${stock != null ? parseInt(stock) : null}, stock),
+          is_active   = COALESCE(${isActive != null ? isActive === 'true' : null}, is_active),
+          cover_image = COALESCE(${coverImage || null}, cover_image),
+          updated_at  = now()
+        WHERE id = ${req.params.id} AND provider_id = ${user.id}
+      `);
+      const row = await db.execute(drizzleSql`SELECT * FROM products WHERE id = ${req.params.id}`);
+      res.json({ product: ((row as any).rows ?? (row as any))[0] });
+    } catch (err) { next(err); }
+  });
+
+  // DELETE /api/products/:id
+  app.delete("/api/products/:id", async (req, res, next) => {
+    try {
+      const { username } = req.body || {};
+      if (!username) return res.status(400).json({ message: "username requerido" });
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      await db.execute(drizzleSql`DELETE FROM products WHERE id = ${req.params.id} AND provider_id = ${user.id}`);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/products/:id/media — add extra media asset (360, video, 3D)
+  app.post("/api/products/:id/media", upload.single("file"), async (req, res, next) => {
+    try {
+      configureCloudinary();
+      const { mediaType, caption } = req.body || {};
+      if (!req.file && !req.body.url) return res.status(400).json({ message: "file o url requerido" });
+
+      let url = req.body.url;
+      if (req.file) {
+        const resourceType = (mediaType || "").includes("video") ? "video" : "image";
+        const result: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "vianova/products/media", resource_type: resourceType, quality: "auto" },
+            (err, result) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        url = result.secure_url;
+      }
+
+      const db = getDb();
+      const countRow = await db.execute(drizzleSql`SELECT COUNT(*) as c FROM media_assets WHERE entity_id = ${req.params.id}`);
+      const sortOrder = parseInt(((countRow as any).rows ?? (countRow as any))[0]?.c ?? "0");
+
+      const inserted = await db.execute(drizzleSql`
+        INSERT INTO media_assets (entity_id, entity_type, url, type, caption, sort_order)
+        VALUES (${req.params.id}, 'product', ${url}, ${mediaType || 'image'}, ${caption || null}, ${sortOrder})
+        RETURNING *
+      `);
+      res.json({ asset: ((inserted as any).rows ?? (inserted as any))[0] });
+    } catch (err) { next(err); }
+  });
+
+  // DELETE /api/products/:id/media/:assetId
+  app.delete("/api/products/:id/media/:assetId", async (req, res, next) => {
+    try {
+      const db = getDb();
+      await db.execute(drizzleSql`DELETE FROM media_assets WHERE id = ${req.params.assetId} AND entity_id = ${req.params.id}`);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/orders — create order
+  app.post("/api/orders", async (req, res, next) => {
+    try {
+      const { buyerUsername, productId, quantity, notes } = req.body || {};
+      if (!buyerUsername || !productId) return res.status(400).json({ message: "buyerUsername y productId requeridos" });
+
+      const buyer = await storage.getUserByUsername(buyerUsername);
+      if (!buyer) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      const prodRow = await db.execute(drizzleSql`SELECT * FROM products WHERE id = ${productId} AND is_active = true`);
+      const product = ((prodRow as any).rows ?? (prodRow as any))[0];
+      if (!product) return res.status(404).json({ message: "Producto no encontrado o no disponible" });
+
+      const qty = Math.max(1, parseInt(quantity || "1"));
+      const total = (parseFloat(product.price) * qty).toFixed(2);
+
+      const inserted = await db.execute(drizzleSql`
+        INSERT INTO orders (buyer_id, product_id, quantity, unit_price, total, notes)
+        VALUES (${buyer.id}, ${productId}, ${qty}, ${product.price}, ${total}, ${notes || null})
+        RETURNING *
+      `);
+      const order = ((inserted as any).rows ?? (inserted as any))[0];
+
+      // Notify provider via email (non-blocking)
+      const provider = await storage.getUserByUsername(product.provider_username);
+      if (provider?.email) {
+        const { sendCustomEmail } = await import("../mailer.js");
+        sendCustomEmail({
+          to: provider.email,
+          subject: `Nueva orden: ${product.name}`,
+          html: `<p>@${buyerUsername} ha solicitado <strong>${qty}x ${product.name}</strong> — Total: $${total} ${product.currency}.</p>`,
+        }).catch(() => {});
+      }
+
+      res.json({ order });
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/orders/buyer/:username
+  app.get("/api/orders/buyer/:username", async (req, res, next) => {
+    try {
+      const buyer = await storage.getUserByUsername(req.params.username);
+      if (!buyer) return res.status(404).json({ message: "Usuario no encontrado" });
+      const db = getDb();
+      const rows = await db.execute(drizzleSql`
+        SELECT o.*, p.name AS product_name, p.cover_image, p.provider_username
+        FROM orders o JOIN products p ON p.id = o.product_id
+        WHERE o.buyer_id = ${buyer.id}
+        ORDER BY o.created_at DESC LIMIT 50
+      `);
+      res.json({ orders: (rows as any).rows ?? (rows as any) ?? [] });
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/orders/provider/:username
+  app.get("/api/orders/provider/:username", async (req, res, next) => {
+    try {
+      const db = getDb();
+      const rows = await db.execute(drizzleSql`
+        SELECT o.*, p.name AS product_name, p.cover_image, u.username AS buyer_username
+        FROM orders o
+        JOIN products p ON p.id = o.product_id
+        JOIN users u ON u.id = o.buyer_id
+        WHERE p.provider_username = ${req.params.username}
+        ORDER BY o.created_at DESC LIMIT 50
+      `);
+      res.json({ orders: (rows as any).rows ?? (rows as any) ?? [] });
+    } catch (err) { next(err); }
+  });
+
+  // PATCH /api/orders/:id/status
+  app.patch("/api/orders/:id/status", async (req, res, next) => {
+    try {
+      const { status } = req.body || {};
+      if (!status) return res.status(400).json({ message: "status requerido" });
+      const db = getDb();
+      await db.execute(drizzleSql`
+        UPDATE orders SET status = ${status}, updated_at = now() WHERE id = ${req.params.id}
+      `);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/stripe/create-checkout-session
+  app.post("/api/stripe/create-checkout-session", async (req, res, next) => {
+    try {
+      const { productId, quantity, buyerUsername } = req.body || {};
+      if (!productId || !buyerUsername) return res.status(400).json({ message: "Faltan parámetros" });
+
+      if (!process.env.STRIPE_SECRET_KEY) {
+        // Dummy fallback si no hay API key configurada
+        return res.json({ url: "/products?success=true&dummy=1" });
+      }
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+      const db = getDb();
+      const prodRow = await db.execute(drizzleSql`SELECT * FROM products WHERE id = ${productId}`);
+      const product = ((prodRow as any).rows ?? (prodRow as any))[0];
+      if (!product) return res.status(404).json({ message: "Producto no encontrado" });
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [{
+          price_data: {
+            currency: product.currency.toLowerCase(),
+            product_data: {
+              name: product.name,
+              images: product.cover_image ? [product.cover_image] : [],
+            },
+            unit_amount: Math.round(parseFloat(product.price) * 100), // en centavos
+          },
+          quantity: Math.max(1, parseInt(quantity || "1")),
+        }],
+        mode: "payment",
+        success_url: `${process.env.CLIENT_URL || "http://localhost:5000"}/products?success=true`,
+        cancel_url: `${process.env.CLIENT_URL || "http://localhost:5000"}/products?canceled=true`,
+        metadata: {
+          productId,
+          buyerUsername,
+          quantity: String(quantity || 1)
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/stripe/webhook
+  app.post("/api/stripe/webhook", async (req, res) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+        return res.status(400).send("Stripe not configured");
+      }
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+      const sig = req.headers["stripe-signature"] as string;
+      // req.rawBody is provided by express.json verification inside server/index.ts
+      let event = stripe.webhooks.constructEvent(req.rawBody as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET);
+
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as any;
+        const meta = session.metadata;
+        if (meta?.productId && meta?.buyerUsername) {
+          // Process order creation after payment
+          const buyer = await storage.getUserByUsername(meta.buyerUsername);
+          const db = getDb();
+          const prodRow = await db.execute(drizzleSql`SELECT * FROM products WHERE id = ${meta.productId}`);
+          const product = ((prodRow as any).rows ?? (prodRow as any))[0];
+
+          if (buyer && product) {
+            const qty = parseInt(meta.quantity || "1");
+            const total = (parseFloat(product.price) * qty).toFixed(2);
+            await db.execute(drizzleSql`
+              INSERT INTO orders (buyer_id, product_id, quantity, unit_price, total, status, payment_intent)
+              VALUES (${buyer.id}, ${product.id}, ${qty}, ${product.price}, ${total}, 'paid', ${session.payment_intent})
+            `);
+
+            // Check if provider has an email
+            const provider = await storage.getUserByUsername(product.provider_username);
+            if (provider?.email) {
+              const { sendCustomEmail } = await import("../mailer.js");
+              sendCustomEmail({
+                to: provider.email,
+                subject: `Pago Confirmado: ${product.name}`,
+                html: `<p>@${meta.buyerUsername} ha pagado por <strong>${qty}x ${product.name}</strong> — Total: $${total} ${product.currency}.</p>`
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error("Webhook Error:", err.message);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+  });
+
+  // ── VIASOCIAL — Red Social ─────────────────────────────────────────────────
+
+
+  // GET /api/social/feed?cursor=<created_at>&limit=10
+  // Cursor-based pagination (much faster than OFFSET for large datasets)
+  app.get("/api/social/feed", async (req, res, next) => {
+    try {
+      const db = getDb();
+      const limit = Math.min(parseInt(String(req.query.limit || "10")), 20);
+      const cursor = req.query.cursor as string | undefined; // ISO timestamp
+
+      const rows = await db.execute(drizzleSql`
+        SELECT
+          p.id, p.username, p.caption, p.media_url, p.media_type,
+          p.likes_count, p.comments_count, p.created_at,
+          u.avatar_url
+        FROM social_posts p
+        JOIN users u ON u.id = p.user_id
+        ${cursor ? drizzleSql`WHERE p.created_at < ${new Date(cursor)}` : drizzleSql``}
+        ORDER BY p.created_at DESC
+        LIMIT ${limit + 1}
+      `);
+
+      const posts: any[] = (rows as any).rows ?? (rows as any) ?? [];
+      const hasMore = posts.length > limit;
+      const result = hasMore ? posts.slice(0, limit) : posts;
+      const nextCursor = hasMore ? result[result.length - 1].created_at : null;
+
+      res.json({ posts: result, nextCursor, hasMore });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/social/posts — create post with optional media
+  app.post("/api/social/posts", upload.single("media"), async (req, res, next) => {
+    try {
+      configureCloudinary();
+      const { username, caption, mediaType } = req.body || {};
+      if (!username) return res.status(400).json({ message: "username requerido" });
+
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      let mediaUrl: string | null = null;
+      let finalMediaType = mediaType || "image";
+
+      if (req.file) {
+        const resourceType = (mediaType || "").includes("video") ? "video" : "image";
+        const uploadResult: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "vianova/social", resource_type: resourceType, quality: "auto" },
+            (err, result) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        mediaUrl = uploadResult.secure_url;
+      } else if (req.body.mediaUrl) {
+        mediaUrl = req.body.mediaUrl;
+      }
+
+      const db = getDb();
+      const inserted = await db.execute(drizzleSql`
+        INSERT INTO social_posts (user_id, username, caption, media_url, media_type)
+        VALUES (${user.id}, ${username}, ${caption || null}, ${mediaUrl}, ${finalMediaType})
+        RETURNING *
+      `);
+      const post = ((inserted as any).rows ?? (inserted as any))[0];
+      res.json({ post });
+    } catch (err) { next(err); }
+  });
+
+  // DELETE /api/social/posts/:id
+  app.delete("/api/social/posts/:id", async (req, res, next) => {
+    try {
+      const { username } = req.body || {};
+      if (!username) return res.status(400).json({ message: "username requerido" });
+      const db = getDb();
+      await db.execute(drizzleSql`
+        DELETE FROM social_posts WHERE id = ${req.params.id} AND username = ${username}
+      `);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/social/posts/:id/like  { username }
+  app.post("/api/social/posts/:id/like", async (req, res, next) => {
+    try {
+      const { username } = req.body || {};
+      if (!username) return res.status(400).json({ message: "username requerido" });
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      // Upsert like (ignore if already liked)
+      await db.execute(drizzleSql`
+        INSERT INTO social_likes (post_id, user_id) VALUES (${req.params.id}, ${user.id})
+        ON CONFLICT DO NOTHING
+      `);
+      await db.execute(drizzleSql`
+        UPDATE social_posts SET likes_count = likes_count + 1 WHERE id = ${req.params.id}
+      `);
+      const row = await db.execute(drizzleSql`SELECT likes_count FROM social_posts WHERE id = ${req.params.id}`);
+      const count = ((row as any).rows ?? (row as any))[0]?.likes_count ?? 0;
+      res.json({ likes: count });
+    } catch (err) { next(err); }
+  });
+
+  // DELETE /api/social/posts/:id/like  { username }
+  app.delete("/api/social/posts/:id/like", async (req, res, next) => {
+    try {
+      const { username } = req.body || {};
+      if (!username) return res.status(400).json({ message: "username requerido" });
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      const result = await db.execute(drizzleSql`
+        DELETE FROM social_likes WHERE post_id = ${req.params.id} AND user_id = ${user.id}
+      `);
+      const deleted = (result as any).rowCount ?? 0;
+      if (deleted > 0) {
+        await db.execute(drizzleSql`
+          UPDATE social_posts SET likes_count = GREATEST(likes_count - 1, 0) WHERE id = ${req.params.id}
+        `);
+      }
+      const row = await db.execute(drizzleSql`SELECT likes_count FROM social_posts WHERE id = ${req.params.id}`);
+      const count = ((row as any).rows ?? (row as any))[0]?.likes_count ?? 0;
+      res.json({ likes: count });
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/social/posts/:id/likes/check?username=xxx
+  app.get("/api/social/posts/:id/likes/check", async (req, res, next) => {
+    try {
+      const username = req.query.username as string;
+      if (!username) return res.json({ liked: false });
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.json({ liked: false });
+      const db = getDb();
+      const row = await db.execute(drizzleSql`
+        SELECT 1 FROM social_likes WHERE post_id = ${req.params.id} AND user_id = ${user.id} LIMIT 1
+      `);
+      const liked = ((row as any).rows ?? (row as any)).length > 0;
+      res.json({ liked });
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/social/posts/:id/comments
+  app.get("/api/social/posts/:id/comments", async (req, res, next) => {
+    try {
+      const db = getDb();
+      const rows = await db.execute(drizzleSql`
+        SELECT c.id, c.username, c.content, c.created_at, u.avatar_url
+        FROM social_comments c
+        JOIN users u ON u.id = c.user_id
+        WHERE c.post_id = ${req.params.id}
+        ORDER BY c.created_at ASC
+        LIMIT 50
+      `);
+      res.json({ comments: (rows as any).rows ?? (rows as any) ?? [] });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/social/posts/:id/comments  { username, content }
+  app.post("/api/social/posts/:id/comments", async (req, res, next) => {
+    try {
+      const { username, content } = req.body || {};
+      if (!username || !content) return res.status(400).json({ message: "username y content requeridos" });
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      await db.execute(drizzleSql`
+        INSERT INTO social_comments (post_id, user_id, username, content)
+        VALUES (${req.params.id}, ${user.id}, ${username}, ${content})
+      `);
+      await db.execute(drizzleSql`
+        UPDATE social_posts SET comments_count = comments_count + 1 WHERE id = ${req.params.id}
+      `);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/social/follow  { followerUsername, followingUsername }
+  app.post("/api/social/follow", async (req, res, next) => {
+    try {
+      const { followerUsername, followingUsername } = req.body || {};
+      if (!followerUsername || !followingUsername) return res.status(400).json({ message: "Ambos usernames requeridos" });
+      const follower = await storage.getUserByUsername(followerUsername);
+      const following = await storage.getUserByUsername(followingUsername);
+      if (!follower || !following) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      await db.execute(drizzleSql`
+        INSERT INTO social_followers (follower_id, following_id)
+        VALUES (${follower.id}, ${following.id})
+        ON CONFLICT DO NOTHING
+      `);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // DELETE /api/social/follow  { followerUsername, followingUsername }
+  app.delete("/api/social/follow", async (req, res, next) => {
+    try {
+      const { followerUsername, followingUsername } = req.body || {};
+      if (!followerUsername || !followingUsername) return res.status(400).json({ message: "Ambos usernames requeridos" });
+      const follower = await storage.getUserByUsername(followerUsername);
+      const following = await storage.getUserByUsername(followingUsername);
+      if (!follower || !following) return res.status(404).json({ message: "Usuario no encontrado" });
+
+      const db = getDb();
+      await db.execute(drizzleSql`
+        DELETE FROM social_followers WHERE follower_id = ${follower.id} AND following_id = ${following.id}
+      `);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/social/posts/user/:username — user's own posts
+  app.get("/api/social/posts/user/:username", async (req, res, next) => {
+    try {
+      const db = getDb();
+      const rows = await db.execute(drizzleSql`
+        SELECT p.*, u.avatar_url
+        FROM social_posts p
+        JOIN users u ON u.id = p.user_id
+        WHERE p.username = ${req.params.username}
+        ORDER BY p.created_at DESC
+        LIMIT 30
+      `);
+      res.json({ posts: (rows as any).rows ?? (rows as any) ?? [] });
+    } catch (err) { next(err); }
   });
 
   // ── Módulo Taxi ────────────────────────────────────────────────────────────

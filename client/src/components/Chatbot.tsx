@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Image as ImageIcon, Loader2, Bot, Sparkles, MapPin } from 'lucide-react';
+import { MessageCircle, X, Send, Image as ImageIcon, Loader2, Bot, Sparkles, MapPin, Hotel, UtensilsCrossed, Car, Ticket, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,6 +21,12 @@ export default function Chatbot() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sharedLocation, setSharedLocation] = useState<{lat: number, lng: number} | undefined>();
+  const [isLocating, setIsLocating] = useState(false);
+  const [manualLocationInput, setManualLocationInput] = useState('');
+  const [destinationCity, setDestinationCity] = useState('');
+  const [isSendingBookings, setIsSendingBookings] = useState(false);
+  const [bookingsSent, setBookingsSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
@@ -44,17 +50,6 @@ export default function Chatbot() {
     setIsLoading(true);
 
     try {
-      const getPosition = () => new Promise<GeolocationPosition | null>((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve(pos),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 8000 }
-        );
-      });
-      const pos = await getPosition();
-      const location = pos ? { lat: pos.coords.latitude, lng: pos.coords.longitude } : undefined;
-
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +57,10 @@ export default function Chatbot() {
           username: user?.username || 'anon',
           name: user?.name || user?.username || 'Viajero',
           message: newUserMsg.content,
-          location
+          location: sharedLocation,
+          destinationCity: destinationCity.trim() || undefined,
+          // Send session history from React state (reliable, no DB contamination)
+          history: messages.slice(-14).map(m => ({ role: m.role, content: m.content }))
         })
       });
       const data = await res.json();
@@ -81,6 +79,106 @@ export default function Chatbot() {
       }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleShareLocation = async () => {
+    setIsLocating(true);
+    try {
+      const getPosition = () => new Promise<GeolocationPosition | null>((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          () => resolve(null),
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        );
+      });
+      const pos = await getPosition();
+      if (pos) {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setSharedLocation(loc);
+        
+        const newUserMsg: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: '📍 He compartido mi ubicación actual.'
+        };
+        setMessages(prev => [...prev, newUserMsg]);
+        setIsLoading(true);
+        
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user?.username || 'anon',
+            name: user?.name || user?.username || 'Viajero',
+            message: newUserMsg.content,
+            location: loc,
+            destinationCity: destinationCity.trim() || undefined,
+            history: messages.slice(-14).map(m => ({ role: m.role, content: m.content }))
+          })
+        });
+        const data = await res.json();
+        const reply = data.reply || 'Ubicación recibida.';
+        
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: reply
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: 'No pude acceder a tu ubicación. Por favor revisa los permisos de tu navegador.'
+        }]);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLocating(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handleManualLocationSubmit = async () => {
+    if (!manualLocationInput.trim()) return;
+    
+    const val = manualLocationInput.trim();
+    setManualLocationInput('');
+    
+    const newUserMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `📍 Mi ubicación es: ${val}`
+    };
+    setMessages(prev => [...prev, newUserMsg]);
+    setIsLoading(true);
+    
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user?.username || 'anon',
+          name: user?.name || user?.username || 'Viajero',
+          message: newUserMsg.content,
+          location: undefined, // Bypass GPS
+          destinationCity: destinationCity.trim() || undefined,
+          history: messages.slice(-14).map(m => ({ role: m.role, content: m.content }))
+        })
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.reply || 'Ubicación recibida.'
+      }]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+      setSharedLocation({lat: 0, lng: 0}); // Marcar como compartida para ocultar el cuadro
     }
   };
 
@@ -128,6 +226,89 @@ export default function Chatbot() {
     };
     input.click();
   };
+
+  // ── Booking helpers ────────────────────────────────────────────────────────
+  type BookingItem = { type: string; icon: any; color: string; details: string; providerUsername: string };
+
+  function parseBookings(content: string): BookingItem[] {
+    const section = content.split('### SOLICITUDES DE RESERVA:')[1];
+    if (!section) return [];
+    const lines = section.split('\n').filter(l => l.trim().startsWith('-'));
+    return lines.map(line => {
+      const typeMatch = line.match(/\[(HOTEL|RESTAURANTE|TAXI|RECREACION|TRADUCTOR)\]/);
+      const usernameMatch = line.match(/@([\w._-]+)/);
+      const type = typeMatch?.[1] ?? 'GENERAL';
+      const iconMap: Record<string, any> = { HOTEL: Hotel, RESTAURANTE: UtensilsCrossed, TAXI: Car, RECREACION: Ticket, TRADUCTOR: MessageCircle };
+      const colorMap: Record<string, string> = { HOTEL: 'bg-blue-500/20 border-blue-500/30 text-blue-300', RESTAURANTE: 'bg-orange-500/20 border-orange-500/30 text-orange-300', TAXI: 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300', RECREACION: 'bg-green-500/20 border-green-500/30 text-green-300', TRADUCTOR: 'bg-purple-500/20 border-purple-500/30 text-purple-300' };
+      return {
+        type,
+        icon: iconMap[type] ?? Sparkles,
+        color: colorMap[type] ?? 'bg-primary/20 border-primary/30 text-primary',
+        details: line.replace(/^.*?\]:\s*/, '').replace(/@[\w._-]+/, '').trim(),
+        providerUsername: usernameMatch?.[1] ?? ''
+      };
+    });
+  }
+
+  async function handleConfirmBookings(content: string) {
+    const items = parseBookings(content);
+    if (!items.length) return;
+    setIsSendingBookings(true);
+    try {
+      await fetch('/api/bookings/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          travelerName: user?.name || user?.username || 'Viajero',
+          travelerEmail: user?.email || '',
+          bookings: items.map(b => ({ type: b.type, providerUsername: b.providerUsername, details: b.details }))
+        })
+      });
+      setBookingsSent(true);
+    } catch (e) { console.error(e); }
+    finally { setIsSendingBookings(false); }
+  }
+
+  function BookingCards({ content, msgIdx, totalMsgs }: { content: string; msgIdx: number; totalMsgs: number }) {
+    const items = parseBookings(content);
+    if (!items.length) return null;
+    const isLast = msgIdx === totalMsgs - 1;
+    return (
+      <div className="mt-4 space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-primary/70 mb-3">📋 Solicitudes de Reserva</p>
+        {items.map((item, i) => {
+          const Icon = item.icon;
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.08 }}
+              className={`flex items-start gap-3 p-3 rounded-xl border ${item.color} text-[11px] leading-relaxed`}
+            >
+              <Icon className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-0.5">{item.type}</span>
+                <span>{item.details}</span>
+                {item.providerUsername && <span className="block mt-0.5 opacity-60">@{item.providerUsername}</span>}
+              </div>
+            </motion.div>
+          );
+        })}
+        {isLast && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: items.length * 0.08 }}>
+            {bookingsSent
+              ? <div className="flex items-center gap-2 mt-3 text-green-400 text-xs font-bold"><CheckCircle2 className="h-4 w-4" />¡Solicitudes enviadas a todos los proveedores!</div>
+              : <Button onClick={() => handleConfirmBookings(content)} disabled={isSendingBookings} className="w-full mt-3 bg-primary text-black hover:bg-primary/80 font-bold text-xs h-9 rounded-xl">
+                  {isSendingBookings ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                  Confirmar y Enviar Reservas
+                </Button>
+            }
+          </motion.div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -217,13 +398,63 @@ export default function Chatbot() {
                                 : 'bg-secondary/40 backdrop-blur-md text-foreground border border-white/5 rounded-bl-sm'
                             }`}
                           >
-                            <p className="whitespace-pre-wrap tracking-wide">{msg.content}</p>
+                            <div className="whitespace-pre-wrap tracking-wide">
+                              {msg.content.includes('### SOLICITUDES DE RESERVA:')
+                                ? <>
+                                    <span>{msg.content.split('### SOLICITUDES DE RESERVA:')[0]}</span>
+                                    <BookingCards content={msg.content} msgIdx={idx} totalMsgs={messages.length} />
+                                  </>
+                                : <span>{msg.content}</span>
+                              }
+                            </div>
                             {msg.image && (
                               <img 
                                 src={msg.image} 
                                 alt="Referencia" 
                                 className="mt-3 rounded-lg border border-black/10 w-full h-auto shadow-md"
                               />
+                            )}
+                            {msg.role === 'assistant' && msg.content.toLowerCase().includes('ubicación') && !sharedLocation && idx === messages.length - 1 && (
+                              <div className="mt-4 p-3 bg-background/50 rounded-xl border border-primary/20 shadow-sm">
+                                <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+                                  <strong className="text-primary font-bold">💡 Nota:</strong> El GPS automático en computadoras puede ser impreciso o mostrar "Bogotá" debido a tu proveedor de internet.
+                                </p>
+                                <div className="flex flex-col gap-3">
+                                  <Button 
+                                    onClick={handleShareLocation}
+                                    disabled={isLocating || isLoading}
+                                    className="w-full bg-primary/20 text-primary hover:bg-primary/30 border border-primary/50 text-xs font-bold transition-all"
+                                  >
+                                    {isLocating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MapPin className="h-4 w-4 mr-2" />}
+                                    Usar GPS Automático
+                                  </Button>
+                                  
+                                  <div className="flex gap-2 items-center">
+                                    <div className="h-[1px] flex-1 bg-border/50"></div>
+                                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">O ingresa manualmente</span>
+                                    <div className="h-[1px] flex-1 bg-border/50"></div>
+                                  </div>
+
+                                  <div className="flex gap-2">
+                                    <Input 
+                                      placeholder="Ej. Pitalito, Huila" 
+                                      value={manualLocationInput}
+                                      onChange={(e) => setManualLocationInput(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && handleManualLocationSubmit()}
+                                      className="h-8 text-xs bg-background/50 border-primary/20 focus-visible:ring-primary/50"
+                                      disabled={isLoading || isLocating}
+                                    />
+                                    <Button 
+                                      size="sm" 
+                                      onClick={handleManualLocationSubmit}
+                                      disabled={!manualLocationInput.trim() || isLoading || isLocating}
+                                      className="h-8 px-3 text-xs bg-primary text-black hover:bg-primary/80"
+                                    >
+                                      Enviar
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
                             )}
                           </div>
                         </motion.div>
@@ -254,7 +485,20 @@ export default function Chatbot() {
               </div>
 
               {/* FOOTER / INPUT */}
-              <div className="p-4 bg-background/95 backdrop-blur-xl border-t border-white/5 relative z-10">
+              <div className="p-4 bg-background/95 backdrop-blur-xl border-t border-white/5 relative z-10 flex flex-col gap-3">
+                <div className="flex items-center gap-2 px-1">
+                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Destino de viaje:</span>
+                  <input
+                    type="text"
+                    placeholder="Opcional (Ej. Cali)"
+                    value={destinationCity}
+                    onChange={(e) => setDestinationCity(e.target.value)}
+                    disabled={isLoading}
+                    className="bg-transparent border-b border-white/10 focus:border-primary outline-none text-sm text-foreground placeholder:text-muted-foreground/40 w-32 pb-0.5 transition-colors"
+                  />
+                </div>
+                
                 <div className="relative flex items-center">
                   <Button 
                     variant="ghost" 
@@ -265,14 +509,16 @@ export default function Chatbot() {
                   >
                     <ImageIcon className="h-5 w-5" />
                   </Button>
-                  <Input
-                    placeholder="Pregúntame sobre restaurantes, hoteles..."
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    disabled={isLoading}
-                    className="pl-12 pr-14 h-14 bg-secondary/30 border-white/10 rounded-full focus-visible:ring-primary focus-visible:ring-1 text-sm shadow-inner transition-all hover:bg-secondary/50 placeholder:text-muted-foreground/70"
-                  />
+                  <div className="flex-1 ml-12 pr-14">
+                    <Input
+                      placeholder="Pregúntame sobre restaurantes, hoteles..."
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                      disabled={isLoading}
+                      className="w-full h-14 bg-secondary/30 border-white/10 rounded-full focus-visible:ring-primary focus-visible:ring-1 text-sm shadow-inner transition-all hover:bg-secondary/50 placeholder:text-muted-foreground/70"
+                    />
+                  </div>
                   <Button 
                     size="icon" 
                     onClick={handleSend} 

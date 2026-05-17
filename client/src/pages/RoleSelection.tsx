@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth, UserRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { User, Building2, Utensils, TentTree, Car, ArrowRight, Loader2 } from "lucide-react";
+import { User, Building2, Utensils, TentTree, Car, ArrowRight, Loader2, Languages } from "lucide-react";
 import { motion } from "framer-motion";
 
 const ROLES: { value: UserRole; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -11,6 +11,7 @@ const ROLES: { value: UserRole; label: string; icon: React.ReactNode; desc: stri
   { value: "restaurant", label: "Restaurante", icon: <Utensils className="h-6 w-6" />, desc: "Quiero promover mi restaurante" },
   { value: "recreation", label: "Recreacion", icon: <TentTree className="h-6 w-6" />, desc: "Ofrezco actividades y experiencias" },
   { value: "taxi", label: "Transporte", icon: <Car className="h-6 w-6" />, desc: "Brindo servicios de transporte" },
+  { value: "translator", label: "Traductor", icon: <Languages className="h-6 w-6" />, desc: "Intermedío entre extranjeros y locales" },
 ];
 
 export default function RoleSelection() {

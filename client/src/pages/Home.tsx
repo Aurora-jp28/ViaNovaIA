@@ -81,8 +81,8 @@ export default function Home() {
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
       (pos) => setUserLoc([pos.coords.latitude, pos.coords.longitude]),
-      () => { },
-      { enableHighAccuracy: true, timeout: 8000 }
+      (err) => console.warn("Home Geo error:", err),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
     );
   }, []);
 

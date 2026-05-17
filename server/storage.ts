@@ -12,6 +12,7 @@ import {
   userRoles,
   reviews,
   paymentMethods,
+  notifications,
   type User,
   type InsertUser,
   type Message,
@@ -27,6 +28,8 @@ import {
   type InsertReview,
   type PaymentMethod,
   type InsertPaymentMethod,
+  type Notification,
+  type InsertNotification
 } from "../shared/schema.js";
 
 // Storage interface for DB-backed operations
@@ -39,16 +42,22 @@ export interface IStorage {
   updateUserRole(userId: string, role: string): Promise<User>;
   upsertConversation(userId: string, title?: string): Promise<Conversation>;
   addMessage(conversationId: string, role: string, content: string, metadata?: any): Promise<Message>;
+  getMessages(conversationId: string, limit?: number): Promise<Message[]>;
   insertService(svc: InsertService): Promise<Service>;
   updateService(id: string, data: Partial<InsertService>): Promise<Service>;
   deleteService(id: string, providerUsername: string): Promise<void>;
   listServicesByCategory(category: string): Promise<Service[]>;
   listProviderServices(providerUsername: string): Promise<Service[]>;
+  listServicesByCity(city: string): Promise<Service[]>;
   insertComment(cmt: InsertComment): Promise<Comment>;
   listCommentsByLocation(locationId: string): Promise<Comment[]>;
   createPasswordResetToken(userId: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
   deletePasswordResetToken(token: string): Promise<void>;
+  
+  insertNotification(data: InsertNotification): Promise<Notification>;
+  getProviderNotifications(providerUsername: string): Promise<Notification[]>;
+  markNotificationAsRead(id: string): Promise<void>;
 }
 
 export function getDb() {
@@ -86,10 +95,35 @@ export class DbStorage implements IStorage {
     return await db.select().from(services).where(eq(services.providerUsername, providerUsername));
   }
 
+  async listServicesByCity(city: string): Promise<Service[]> {
+    const db = getDb();
+    // Case-insensitive match on city column (added by seed script)
+    const rows = await db.execute(
+      drizzleSql`SELECT * FROM services WHERE lower(city) LIKE lower(${'%' + city + '%'}) ORDER BY rating DESC NULLS LAST LIMIT 20`
+    );
+    return (rows as any).rows ?? (rows as any) ?? [];
+  }
+
   async insertComment(cmt: InsertComment): Promise<Comment> {
     const db = getDb();
     const rows = await db.insert(comments).values(cmt).returning();
     return rows[0];
+  }
+
+  async insertNotification(data: InsertNotification): Promise<Notification> {
+    const db = getDb();
+    const rows = await db.insert(notifications).values(data).returning();
+    return rows[0];
+  }
+
+  async getProviderNotifications(providerUsername: string): Promise<Notification[]> {
+    const db = getDb();
+    return await db.select().from(notifications).where(eq(notifications.providerUsername, providerUsername)).orderBy(desc(notifications.createdAt));
+  }
+
+  async markNotificationAsRead(id: string): Promise<void> {
+    const db = getDb();
+    await db.update(notifications).set({ isRead: "true" }).where(eq(notifications.id, id));
   }
 
   async listCommentsByLocation(locationId: string): Promise<Comment[]> {
@@ -162,6 +196,18 @@ export class DbStorage implements IStorage {
       .values({ conversationId, role, content, metadata })
       .returning();
     return created[0];
+  }
+
+  async getMessages(conversationId: string, limit: number = 15): Promise<Message[]> {
+    const db = getDb();
+    // Fetch the last `limit` messages, ordered ascending so they appear in correct timeline order
+    const rows = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
+    return rows.reverse(); // Return in chronological order for the LLM
   }
 
   // --- Password Reset Tokens ---

@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/lib/auth";
 import { ReviewForm, StarDisplay } from "@/components/ReviewSystem";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Bot, User } from "lucide-react";
 
 const fmt = (n: number) =>
   n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
@@ -46,6 +48,7 @@ export default function RideHistory() {
   const [reviewedRides, setReviewedRides] = useState<Set<string>>(new Set());
   const [expandedRide, setExpandedRide] = useState<string | null>(null);
   const [rideReviews, setRideReviews] = useState<Record<string, any[]>>({});
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
 
   const isTaxi = user?.role === "taxi";
 
@@ -66,6 +69,22 @@ export default function RideHistory() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    if (user?.username) {
+      fetch(`/api/chat/history?username=${encodeURIComponent(user.username)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setChatHistory(data);
+          } else {
+            setChatHistory([]);
+          }
+        })
+        .catch((e) => {
+          console.error(e);
+          setChatHistory([]);
+        });
+    }
   }, [user?.username, user?.role]);
 
   // Check which rides user has already reviewed
@@ -111,7 +130,7 @@ export default function RideHistory() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
-      <div className="container max-w-3xl py-8 px-4">
+      <div className="max-w-[1600px] mx-auto w-full py-8 px-4 lg:px-8">
         <button
           onClick={() => setLocation(isTaxi ? "/taxi-dashboard" : "/")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
@@ -119,19 +138,20 @@ export default function RideHistory() {
           <ArrowLeft className="h-4 w-4" /> {isTaxi ? "Panel de Taxista" : "Volver al inicio"}
         </button>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-              <Clock className="h-6 w-6 text-primary" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-8 xl:col-span-8">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
+                <Clock className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Historial de Viajes y Chats</h1>
+                <p className="text-sm text-muted-foreground">
+                  {isTaxi ? "Viajes realizados como conductor" : "Tus viajes como pasajero"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Historial de Viajes</h1>
-              <p className="text-sm text-muted-foreground">
-                {isTaxi ? "Viajes realizados como conductor" : "Tus viajes como pasajero"}
-              </p>
-            </div>
-          </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 my-6">
@@ -343,7 +363,47 @@ export default function RideHistory() {
               })}
             </div>
           )}
-        </motion.div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-4 xl:col-span-4">
+            <div className="bg-card border border-border/40 rounded-2xl overflow-hidden flex flex-col h-[700px] sticky top-24 shadow-xl">
+              <div className="p-4 border-b border-border/40 bg-secondary/20 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/20 text-primary">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-bold">Historial del Asistente</h2>
+                  <p className="text-xs text-muted-foreground">Tus últimas conversaciones con VIANova</p>
+                </div>
+              </div>
+              <ScrollArea className="flex-1 p-4">
+                {chatHistory.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-50">
+                    <MessageSquare className="h-12 w-12 mb-4" />
+                    <p>No tienes mensajes aún con el asistente.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {chatHistory.map((msg, i) => (
+                      <div key={msg.id || i} className={`flex gap-3 items-start ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-secondary' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                          {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                        </div>
+                        <div className={`rounded-2xl p-3 text-sm max-w-[85%] ${
+                          msg.role === 'user'
+                            ? 'bg-primary text-black rounded-tr-sm'
+                            : 'bg-secondary/40 text-foreground border border-white/5 rounded-tl-sm'
+                        }`}>
+                          <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </div>
   );

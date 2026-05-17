@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, User, Building2, Utensils, TentTree, Car, Shield, Check,
   AlertCircle, Loader2, Plus, ChevronDown, Pencil, Save, X, Trash2,
-  Wallet, Star,
+  Wallet, Star, Languages,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
@@ -18,15 +18,17 @@ const ROLES: { value: UserRole; label: string; icon: React.ReactElement; desc: s
   { value: "restaurant", label: "Restaurante", icon: <Utensils className="h-5 w-5" />, desc: "Promueve tu gastronomía local", color: "text-orange-400", fields: ["businessName", "businessAddress", "businessPhone"] },
   { value: "recreation", label: "Recreación", icon: <TentTree className="h-5 w-5" />, desc: "Ofrece experiencias y actividades", color: "text-green-400", fields: ["businessName", "businessAddress", "businessPhone"] },
   { value: "taxi", label: "Taxista", icon: <Car className="h-5 w-5" />, desc: "Ofrece servicios de transporte", color: "text-yellow-400", fields: ["vehicleType", "plate", "phone"] },
+  { value: "translator", label: "Traductor", icon: <Languages className="h-5 w-5" />, desc: "Interpreta entre visitantes extranjeros y locales", color: "text-teal-400", fields: ["languages", "businessPhone"] },
 ];
 
 const FIELD_LABELS: Record<string, string> = {
   businessName: "Nombre del Negocio",
   businessAddress: "Dirección",
-  businessPhone: "Teléfono",
+  businessPhone: "Teléfono de Contacto",
   vehicleType: "Tipo de Vehículo",
   plate: "Placa",
   phone: "Teléfono",
+  languages: "Idiomas (separados por coma)",
 };
 
 const FIELD_PLACEHOLDERS: Record<string, string> = {
@@ -36,6 +38,7 @@ const FIELD_PLACEHOLDERS: Record<string, string> = {
   vehicleType: "Ej: Sedan, SUV, Van",
   plate: "Ej: ABC123",
   phone: "Ej: 3001234567",
+  languages: "Ej: Inglés, Francés, Portugués",
 };
 
 export default function AccountSettings() {

@@ -216,11 +216,12 @@ export default function MapView({ locations, selectedCategory, onMarkerClick, se
         setCenter(c);
         setInitializing(false);
       },
-      () => {
+      (err) => {
+        console.warn("Geo error:", err);
         setCenter(fallback);
         setInitializing(false);
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
     );
   }, []);
 
@@ -337,12 +338,19 @@ export default function MapView({ locations, selectedCategory, onMarkerClick, se
               setCenter(userLoc);
               setZoom(14);
             } else if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition((pos) => {
-                const c: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-                setUserLoc(c);
-                setCenter(c);
-                setZoom(14);
-              });
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const c: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                  setUserLoc(c);
+                  setCenter(c);
+                  setZoom(14);
+                },
+                (err) => {
+                  alert("No pudimos obtener tu ubicación. Revisa los permisos de tu navegador.");
+                  console.warn(err);
+                },
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+              );
             }
           }}
           className="absolute z-[400] top-3 right-3 bg-background/80 backdrop-blur-md px-3 py-2 rounded-xl border border-border/50 text-xs font-medium hover:bg-background shadow-lg flex items-center gap-1.5 transition-all hover:scale-105"

@@ -29,7 +29,12 @@ function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   );
 }
 
+import NotificationsScreen from "../screens/NotificationsScreen";
+
 function HomeTabs() {
+  const { user } = useAuth();
+  const isProvider = user && user.role !== "traveler";
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -56,6 +61,13 @@ function HomeTabs() {
         component={MapScreen}
         options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🗺️" focused={focused} /> }}
       />
+      {isProvider && (
+        <Tab.Screen
+          name="Reservas"
+          component={NotificationsScreen}
+          options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🛎️" focused={focused} /> }}
+        />
+      )}
       <Tab.Screen
         name="Perfil"
         component={ProfileScreen}

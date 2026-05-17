@@ -190,3 +190,14 @@ export async function sendPasswordChangedEmail(to: string, userName: string, eme
     attachments: logoAttachment(),
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 4. GENERIC — For order notifications and custom alerts
+// ═══════════════════════════════════════════════════════════════════════════════
+export async function sendCustomEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<void> {
+  await getTransporter().sendMail({
+    from: FROM(), to, subject,
+    html: shell(html),
+    attachments: logoAttachment(),
+  });
+}

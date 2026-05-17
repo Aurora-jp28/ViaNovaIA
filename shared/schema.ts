@@ -17,6 +17,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "restaurant",
   "recreation",
   "taxi",
+  "translator",
 ]);
 
 export const users = pgTable("users", {
@@ -241,7 +242,20 @@ export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).pick
   isDefault: true,
 });
 
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerUsername: text("provider_username").notNull(),
+  travelerUsername: text("traveler_username"),
+  type: text("type").notNull(),
+  details: text("details").notNull(),
+  isRead: text("is_read").default("false"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications);
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
@@ -259,6 +273,7 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type UserRoleRecord = typeof userRoles.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 
 
 export type LocationItem = {
