@@ -198,7 +198,7 @@ export async function registerRoutes(
 
       const token = generateToken(user);
       res.cookie("token", token, COOKIE_OPTIONS);
-      res.json({ user: sanitizeUser(user) });
+      res.json({ user: sanitizeUser(user), token });
     } catch (err) {
       next(err);
     }
@@ -255,7 +255,7 @@ export async function registerRoutes(
 
       const token = generateToken(user);
       res.cookie("token", token, COOKIE_OPTIONS);
-      res.json({ user: sanitizeUser(user) });
+      res.json({ user: sanitizeUser(user), token });
     } catch (err) {
       next(err);
     }
@@ -317,7 +317,9 @@ export async function registerRoutes(
         });
       }
 
-      res.json({ user: sanitizeUser(user) });
+      const token = generateToken(user);
+      res.cookie("token", token, COOKIE_OPTIONS);
+      res.json({ user: sanitizeUser(user), token });
     } catch (err) {
       next(err);
     }
@@ -532,6 +534,9 @@ export async function registerRoutes(
         });
       }
 
+      const token = generateToken(user);
+      res.cookie("token", token, COOKIE_OPTIONS);
+
       const clientUrl = getBaseUrl(req);
       const payload = encodeURIComponent(JSON.stringify({
         username: user.username,
@@ -540,7 +545,7 @@ export async function registerRoutes(
         role: user.role || "traveler",
         roleChangedAt: user.roleChangedAt || null,
       }));
-      res.redirect(`${clientUrl}/login?google_user=${payload}`);
+      res.redirect(`${clientUrl}/login?google_user=${payload}&token=${encodeURIComponent(token)}`);
     } catch (err) {
       console.error("Auth google error:", err);
       next(err);

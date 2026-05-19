@@ -88,6 +88,7 @@ export const useAuth = create<AuthState>((set, get) => {
           email: data.user.email,
           roleChangedAt: data.user.roleChangedAt,
         };
+        if (data.token) localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user', JSON.stringify(user));
         set({ user, isAuthenticated: true, loading: false });
         get().fetchRoles();
@@ -132,6 +133,7 @@ export const useAuth = create<AuthState>((set, get) => {
           email: result.user.email,
           roles: ['traveler'],
         };
+        if (result.token) localStorage.setItem('auth_token', result.token);
         localStorage.setItem('user', JSON.stringify(user));
         set({ user, isAuthenticated: true, loading: false });
         return { ok: true };
@@ -148,6 +150,7 @@ export const useAuth = create<AuthState>((set, get) => {
         // ignore
       }
       localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
       set({ user: null, isAuthenticated: false });
       const { queryClient } = await import('./queryClient');
       queryClient.clear();

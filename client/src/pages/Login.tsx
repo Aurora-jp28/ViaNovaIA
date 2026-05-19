@@ -49,8 +49,10 @@ export default function Login() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const g = params.get("google_user");
+    const t = params.get("token");
     if (g) {
       try {
+        if (t) localStorage.setItem('auth_token', t);
         const { username: u, name, email, role, roleChangedAt } = JSON.parse(decodeURIComponent(g));
         loginDirect(u, role || "traveler", name, email, roleChangedAt);
         setLocation("/");
