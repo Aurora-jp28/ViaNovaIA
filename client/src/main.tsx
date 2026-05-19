@@ -1,7 +1,13 @@
 import { createRoot } from "react-dom/client";
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import App from "./App";
 import "./index.css";
 
+GoogleAuth.initialize({
+  clientId: '963320565575-69dp01atb3oo5cmrhiq4uf2ca8fc2g79.apps.googleusercontent.com',
+  scopes: ['profile', 'email'],
+  grantOfflineAccess: true,
+});
 // Parche global: Redirigir todas las peticiones /api a Vercel en el APK/Producción
 const originalFetch = window.fetch;
 window.fetch = async (input, init) => {

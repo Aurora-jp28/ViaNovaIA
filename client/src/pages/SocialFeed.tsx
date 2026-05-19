@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
@@ -74,7 +75,7 @@ function PostCard({ post, currentUser, onDelete }: { post: Post; currentUser: st
   // Check if current user liked this post
   useEffect(() => {
     if (!currentUser) return;
-    fetch(`/api/social/posts/${post.id}/likes/check?username=${encodeURIComponent(currentUser)}`)
+    fetch(`${apiBase}/api/social/posts/${post.id}/likes/check?username=${encodeURIComponent(currentUser)}`)
       .then(r => r.json())
       .then(d => setLiked(d.liked))
       .catch(() => {});
@@ -87,7 +88,7 @@ function PostCard({ post, currentUser, onDelete }: { post: Post; currentUser: st
     setLikes(l => wasLiked ? l - 1 : l + 1);
     try {
       const method = wasLiked ? "DELETE" : "POST";
-      await fetch(`/api/social/posts/${post.id}/like`, {
+      await fetch(`${apiBase}/api/social/posts/${post.id}/like`, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: currentUser }),
@@ -101,7 +102,7 @@ function PostCard({ post, currentUser, onDelete }: { post: Post; currentUser: st
   const loadComments = async () => {
     setLoadingComments(true);
     try {
-      const r = await fetch(`/api/social/posts/${post.id}/comments`);
+      const r = await fetch(`${apiBase}/api/social/posts/${post.id}/comments`);
       const d = await r.json();
       setComments(d.comments || []);
     } finally {
@@ -118,7 +119,7 @@ function PostCard({ post, currentUser, onDelete }: { post: Post; currentUser: st
     if (!currentUser || !newComment.trim()) return;
     setPostingComment(true);
     try {
-      const r = await fetch(`/api/social/posts/${post.id}/comments`, {
+      const r = await fetch(`${apiBase}/api/social/posts/${post.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: currentUser, content: newComment.trim() }),
@@ -143,7 +144,7 @@ function PostCard({ post, currentUser, onDelete }: { post: Post; currentUser: st
 
   const handleDelete = async () => {
     if (!currentUser || currentUser !== post.username) return;
-    await fetch(`/api/social/posts/${post.id}`, {
+    await fetch(`${apiBase}/api/social/posts/${post.id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: currentUser }),
@@ -320,7 +321,7 @@ function CreatePostModal({ onClose, onCreated, username }: { onClose: () => void
         uploadForm.append("file", mediaFile);
         uploadForm.append("category", "social");
         uploadForm.append("userId", username);
-        const uploadRes = await fetch("/api/upload", { method: "POST", body: uploadForm });
+        const uploadRes = await fetch(apiBase + "/api/upload", { method: "POST", body: uploadForm });
         const uploadData = await uploadRes.json();
         if (!uploadRes.ok) throw new Error(uploadData.message || "Failed to upload file");
         uploadedUrl = uploadData.url;
@@ -332,7 +333,7 @@ function CreatePostModal({ onClose, onCreated, username }: { onClose: () => void
         mediaType: mediaType
       };
 
-      const r = await fetch("/api/social/posts", { 
+      const r = await fetch(apiBase + "/api/social/posts", { 
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(postBody) 
@@ -459,7 +460,7 @@ export default function SocialFeed() {
     loadingRef.current = true;
     setLoading(true);
     try {
-      const r = await fetch(`/api/social/posts`, { credentials: 'include' });
+      const r = await fetch(`${apiBase}/api/social/posts`, { credentials: 'include' });
       const data = await r.json();
 
       if (!Array.isArray(data)) {

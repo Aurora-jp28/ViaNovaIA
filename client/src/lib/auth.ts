@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { create } from 'zustand';
 
 export type UserRole = 'hotel' | 'restaurant' | 'recreation' | 'taxi' | 'traveler' | 'translator';
@@ -40,7 +41,7 @@ export const useAuth = create<AuthState>((set, get) => {
   setTimeout(async () => {
     const existingUser = localStorage.getItem('user');
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const res = await fetch(apiBase + '/api/auth/me', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         set({ user: data.user, isAuthenticated: true, loading: false });
@@ -69,7 +70,7 @@ export const useAuth = create<AuthState>((set, get) => {
     login: async (username: string, password: string) => {
       set({ loading: true });
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(apiBase + '/api/auth/login', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -113,7 +114,7 @@ export const useAuth = create<AuthState>((set, get) => {
     register: async (data) => {
       set({ loading: true });
       try {
-        const res = await fetch('/api/auth/register', {
+        const res = await fetch(apiBase + '/api/auth/register', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -142,7 +143,7 @@ export const useAuth = create<AuthState>((set, get) => {
 
     logout: async () => {
       try {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+        await fetch(apiBase + '/api/auth/logout', { method: 'POST', credentials: 'include' });
       } catch {
         // ignore
       }
@@ -154,7 +155,7 @@ export const useAuth = create<AuthState>((set, get) => {
 
     forgotPassword: async (email: string) => {
       try {
-        const res = await fetch('/api/auth/forgot-password', {
+        const res = await fetch(apiBase + '/api/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email }),
@@ -168,7 +169,7 @@ export const useAuth = create<AuthState>((set, get) => {
 
     verifyResetToken: async (token: string) => {
       try {
-        const res = await fetch('/api/auth/verify-reset-token', {
+        const res = await fetch(apiBase + '/api/auth/verify-reset-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
@@ -182,7 +183,7 @@ export const useAuth = create<AuthState>((set, get) => {
 
     resetPassword: async (token: string, newPassword: string) => {
       try {
-        const res = await fetch('/api/auth/reset-password', {
+        const res = await fetch(apiBase + '/api/auth/reset-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token, newPassword }),
@@ -198,7 +199,7 @@ export const useAuth = create<AuthState>((set, get) => {
       const user = get().user;
       if (!user) return { ok: false, message: 'No autenticado' };
       try {
-        const res = await fetch('/api/users/role', {
+        const res = await fetch(apiBase + '/api/users/role', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: user.username, role }),
@@ -218,7 +219,7 @@ export const useAuth = create<AuthState>((set, get) => {
       const user = get().user;
       if (!user) return { ok: false, message: 'No autenticado' };
       try {
-        const res = await fetch('/api/users/active-role', {
+        const res = await fetch(apiBase + '/api/users/active-role', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: user.username, role }),
@@ -238,7 +239,7 @@ export const useAuth = create<AuthState>((set, get) => {
       const user = get().user;
       if (!user) return { ok: false, message: 'No autenticado' };
       try {
-        const res = await fetch(`/api/users/${user.username}/roles`, {
+        const res = await fetch(`${apiBase}/api/users/${user.username}/roles`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role, ...data }),
@@ -262,7 +263,7 @@ export const useAuth = create<AuthState>((set, get) => {
       const user = get().user;
       if (!user) return { ok: false, message: 'No autenticado' };
       try {
-        const res = await fetch(`/api/users/${user.username}/roles/${role}`, {
+        const res = await fetch(`${apiBase}/api/users/${user.username}/roles/${role}`, {
           method: 'DELETE',
         });
         const result = await res.json();
@@ -284,7 +285,7 @@ export const useAuth = create<AuthState>((set, get) => {
       const user = get().user;
       if (!user) return [];
       try {
-        const res = await fetch(`/api/users/${user.username}/roles`);
+        const res = await fetch(`${apiBase}/api/users/${user.username}/roles`);
         const data = await res.json();
         const roleNames: UserRole[] = (data.roles || []).map((r: any) => r.role);
         if (roleNames.length === 0) roleNames.push(user.role);

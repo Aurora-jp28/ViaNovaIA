@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { LocationItem } from "@/data/mockData";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,7 @@ export default function CardItem({ item, onViewMap }: CardItemProps) {
   const [realRating, setRealRating] = useState<number>(item.rating || 0);
 
   useEffect(() => {
-    fetch(`/api/comments?locationId=${item.id}`)
+    fetch(`${apiBase}/api/comments?locationId=${item.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.comments && data.comments.length > 0) {

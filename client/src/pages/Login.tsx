@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRight, Mail, KeyRound, ArrowLeft, Check, AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import logoPrincipal from "@/assets/Logo_principal-removebg-preview.png";
 
 // forgot flow steps: email → token → newPassword
 type ForgotStep = "email" | "token" | "newPassword";
@@ -82,6 +86,75 @@ export default function Login() {
 
 
   const clearMessage = () => setMessage(null);
+
+  // ─── Google Login handler ───
+  const handleGoogleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessage();
+    const isApp = Capacitor.isNativePlatform() || navigator.userAgent.includes('wv');
+    
+    if (isApp) {
+      try {
+        let result: any = null;
+        try {
+          // Intentar inicio de sesión
+          result = await GoogleAuth.signIn();
+        } catch (initialErr) {
+          console.warn("First Google Auth attempt failed, retrying in 500ms...", initialErr);
+          // Retry automatically once for cold boot issues
+          await new Promise(r => setTimeout(r, 500));
+          result = await GoogleAuth.signIn();
+        }
+        
+        // Find idToken: some versions put it in result.authentication.idToken, others in result.idToken, others in result.serverAuthCode
+        const idToken = result?.authentication?.idToken || result?.idToken || result?.serverAuthCode;
+        
+        if (result && result.email) {
+          const baseUrl = "https://via-nova-ia.vercel.app";
+          
+          // Helper function for fetch with retry
+          const fetchWithRetry = async (url: string, options: any, retries = 1) => {
+            for (let i = 0; i <= retries; i++) {
+              try {
+                const res = await fetch(url, options);
+                if (res.ok || i === retries) return res;
+              } catch (e) {
+                if (i === retries) throw e;
+                await new Promise(r => setTimeout(r, 1000)); // wait 1s before retrying
+              }
+            }
+            throw new Error("Fetch failed");
+          };
+
+          const res = await fetchWithRetry(`${baseUrl}/api/auth/google/mobile`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              idToken: idToken,
+              email: result.email, 
+              name: result.name || result.givenName || result.email.split('@')[0]
+            })
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            loginDirect(data.user.username, data.user.role, data.user.name, data.user.email, data.user.roleChangedAt);
+            setLocation("/");
+          } else {
+            const data = await res.json();
+            setMessage({ type: "error", text: data.message || "Error al iniciar sesión con Google." });
+          }
+        } else {
+          setMessage({ type: "error", text: "Google Auth no retornó un email." });
+        }
+      } catch (err: any) {
+        console.error("Google Auth Error:", err);
+        setMessage({ type: "error", text: "Error en Google Auth: " + (err.message || JSON.stringify(err)) });
+      }
+    } else {
+      window.location.href = import.meta.env.DEV ? "/api/auth/google" : "https://via-nova-ia.vercel.app/api/auth/google";
+    }
+  };
 
   // ─── Login handler ───
   const handleLogin = async (e: React.FormEvent) => {
@@ -202,9 +275,7 @@ export default function Login() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-primary/10 blur-[120px] rounded-full pointer-events-none" />
         <div className="z-10 text-center px-12 max-w-xl">
           <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 1 }} className="mb-8 flex justify-center">
-            <div className="rounded-3xl overflow-hidden shadow-2xl border border-primary/20">
-              <img src="/logo.jpeg" alt="VIANova" className="w-20 h-20 object-cover" />
-            </div>
+            <img src={logoPrincipal} alt="VIANova" className="w-48 h-48 md:w-64 md:h-64 object-contain drop-shadow-2xl" />
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2 }} className="text-5xl font-heading font-extrabold tracking-tight mb-6">
             Bienvenido a <span className="text-primary">VIANova</span>
@@ -220,7 +291,7 @@ export default function Login() {
         <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="mb-8 lg:hidden flex flex-col items-center">
-            <img src="/logo.jpeg" alt="VIANova" className="w-12 h-12 rounded-xl mb-2" />
+            <img src={logoPrincipal} alt="VIANova" className="w-32 h-32 sm:w-40 sm:h-40 object-contain drop-shadow-2xl mb-2" />
             <h1 className="text-3xl font-heading font-bold">VIANova</h1>
           </div>
 
@@ -246,11 +317,9 @@ export default function Login() {
 
                 {/* Google */}
                 <div className="mb-8">
-                  <Button variant="outline" className="w-full h-12 flex items-center justify-center gap-3 bg-secondary/30 hover:bg-secondary/60 border-border transition-all group" asChild>
-                    <a href={import.meta.env.DEV ? "/api/auth/google" : "https://via-nova-ia.vercel.app/api/auth/google"}>
-                      <svg className="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24"><path d="M21.35 11.1h-9.17v2.92h5.28c-.23 1.34-.92 2.48-1.96 3.25v2.7h3.17c1.85-1.71 2.92-4.22 2.92-7.27 0-.63-.06-1.24-.18-1.82z" fill="#4285F4" /><path d="M12.18 22c2.63 0 4.83-.87 6.44-2.36l-3.17-2.7c-.88.59-2.01.94-3.27.94-2.52 0-4.66-1.7-5.43-3.99H3.48v2.5C5.09 19.9 8.35 22 12.18 22z" fill="#34A853" /><path d="M6.75 13.89c-.2-.6-.31-1.24-.31-1.89s.11-1.29.31-1.89V7.6H3.48C2.57 8.97 2 10.57 2 12.33s.57 3.36 1.48 4.73l3.27-2.5z" fill="#FBBC05" /><path d="M12.18 5.5c1.43 0 2.72.49 3.74 1.46l2.8-2.8C16.99 2.5 14.79 1.5 12.18 1.5 8.35 1.5 5.09 3.6 3.48 6.5l3.27 2.5c.77-2.29 2.91-3.99 5.43-3.99z" fill="#EA4335" /></svg>
-                      <span className="font-medium">Continuar con Google</span>
-                    </a>
+                  <Button variant="outline" className="w-full h-12 flex items-center justify-center gap-3 bg-secondary/30 hover:bg-secondary/60 border-border transition-all group" onClick={handleGoogleLogin}>
+                    <svg className="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24"><path d="M21.35 11.1h-9.17v2.92h5.28c-.23 1.34-.92 2.48-1.96 3.25v2.7h3.17c1.85-1.71 2.92-4.22 2.92-7.27 0-.63-.06-1.24-.18-1.82z" fill="#4285F4" /><path d="M12.18 22c2.63 0 4.83-.87 6.44-2.36l-3.17-2.7c-.88.59-2.01.94-3.27.94-2.52 0-4.66-1.7-5.43-3.99H3.48v2.5C5.09 19.9 8.35 22 12.18 22z" fill="#34A853" /><path d="M6.75 13.89c-.2-.6-.31-1.24-.31-1.89s.11-1.29.31-1.89V7.6H3.48C2.57 8.97 2 10.57 2 12.33s.57 3.36 1.48 4.73l3.27-2.5z" fill="#FBBC05" /><path d="M12.18 5.5c1.43 0 2.72.49 3.74 1.46l2.8-2.8C16.99 2.5 14.79 1.5 12.18 1.5 8.35 1.5 5.09 3.6 3.48 6.5l3.27 2.5c.77-2.29 2.91-3.99 5.43-3.99z" fill="#EA4335" /></svg>
+                    <span className="font-medium">Continuar con Google</span>
                   </Button>
                 </div>
 

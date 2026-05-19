@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -60,7 +61,7 @@ export default function PaymentMethods({ username, compact = false, onSelect }: 
 
   const fetchMethods = async () => {
     try {
-      const res = await fetch(`/api/payment-methods/${username}`);
+      const res = await fetch(`${apiBase}/api/payment-methods/${username}`);
       const data = await res.json();
       setMethods(data.methods || []);
     } catch {} finally {
@@ -77,7 +78,7 @@ export default function PaymentMethods({ username, compact = false, onSelect }: 
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/payment-methods", {
+      const res = await fetch(apiBase + "/api/payment-methods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -105,7 +106,7 @@ export default function PaymentMethods({ username, compact = false, onSelect }: 
 
   const handleRemove = async (id: string) => {
     try {
-      await fetch(`/api/payment-methods/${id}`, {
+      await fetch(`${apiBase}/api/payment-methods/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
@@ -117,7 +118,7 @@ export default function PaymentMethods({ username, compact = false, onSelect }: 
 
   const handleSetDefault = async (id: string) => {
     try {
-      await fetch(`/api/payment-methods/${id}/default`, {
+      await fetch(`${apiBase}/api/payment-methods/${id}/default`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),

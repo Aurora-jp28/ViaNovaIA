@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -52,7 +53,7 @@ export default function TaxiEarnings() {
 
   const { data, isLoading } = useQuery<EarningsResponse>({
     queryKey: ["taxi", "earnings", username],
-    queryFn: () => fetch(`/api/taxi/earnings/${username}`).then((r) => r.json()),
+    queryFn: () => fetch(`${apiBase}/api/taxi/earnings/${username}`).then((r) => r.json()),
     refetchInterval: 30_000,
     enabled: !!username,
   });
@@ -62,7 +63,7 @@ export default function TaxiEarnings() {
 
   const mutation = useMutation({
     mutationFn: async (payload: { taxiUsername: string; amount: number; bankAccount: string; notes?: string }) => {
-      const res = await fetch("/api/taxi/withdraw", {
+      const res = await fetch(apiBase + "/api/taxi/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

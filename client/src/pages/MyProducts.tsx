@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import React, { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -180,7 +181,7 @@ export default function MyProducts() {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/services/provider/${user.username}`);
+      const res = await fetch(`${apiBase}/api/services/provider/${user.username}`);
       const data = await res.json();
       setServices(data.services || []);
     } catch (e) {
@@ -193,7 +194,7 @@ export default function MyProducts() {
   const fetchHotels = useCallback(async () => {
     if (!isRestaurant) return;
     try {
-      const res = await fetch(`/api/services?category=hotel`);
+      const res = await fetch(`${apiBase}/api/services?category=hotel`);
       const data = await res.json();
       setHotelOptions(
         (data.services || []).map((s: any) => ({ id: s.id, name: s.name }))
@@ -233,7 +234,7 @@ export default function MyProducts() {
     if (!parsed && isShortMapsLink(trimmed)) {
       setMapsLinkStatus({ type: "loading", text: "Resolviendo link corto…" });
       try {
-        const res = await fetch(`/api/maps/resolve?url=${encodeURIComponent(trimmed)}`);
+        const res = await fetch(`${apiBase}/api/maps/resolve?url=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
           const data = await res.json();
           if (data?.url) {
@@ -317,7 +318,7 @@ export default function MyProducts() {
     formData.append("file", imageFile);
     formData.append("category", category);
     formData.append("userId", user.username);
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const res = await fetch(apiBase + "/api/upload", { method: "POST", body: formData });
     const data = await res.json();
     return data.url || imageUrl;
   };
@@ -383,7 +384,7 @@ export default function MyProducts() {
       }
 
       if (formMode === "add") {
-        const res = await fetch("/api/services", {
+        const res = await fetch(apiBase + "/api/services", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -391,7 +392,7 @@ export default function MyProducts() {
         if (!res.ok) throw new Error((await res.json()).message);
         setMessage({ type: "success", text: "Producto creado exitosamente" });
       } else {
-        const res = await fetch(`/api/services/${editId}`, {
+        const res = await fetch(`${apiBase}/api/services/${editId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -410,7 +411,7 @@ export default function MyProducts() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/services/${id}`, {
+      await fetch(`${apiBase}/api/services/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ providerUsername: user.username }),

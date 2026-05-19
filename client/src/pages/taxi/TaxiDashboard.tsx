@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { Car, DollarSign, WifiOff, MapPin, RefreshCw, ChevronRight } from "lucide-react";
@@ -33,7 +34,7 @@ export default function TaxiDashboard() {
 
   const { data: earningsData } = useQuery({
     queryKey: ["taxi", "earnings", username],
-    queryFn: () => fetch(`/api/taxi/earnings/${username}`).then((r) => r.json()),
+    queryFn: () => fetch(`${apiBase}/api/taxi/earnings/${username}`).then((r) => r.json()),
     refetchInterval: 30_000,
     enabled: !!username,
   });
@@ -254,7 +255,7 @@ export default function TaxiDashboard() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.97 }}
               className="relative flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white
-                bg-gradient-to-r from-primary via-primary/90 to-emerald-500
+                bg-primary text-primary-foreground
                 shadow-[0_0_20px_rgba(var(--primary-rgb,99,102,241),0.35)]
                 hover:shadow-[0_0_30px_rgba(var(--primary-rgb,99,102,241),0.5)]
                 transition-all duration-300 overflow-hidden group"

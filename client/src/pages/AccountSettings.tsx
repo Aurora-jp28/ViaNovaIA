@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth, UserRole } from "@/lib/auth";
@@ -70,7 +71,7 @@ export default function AccountSettings() {
       fetchRoles();
       // Load current vehicle data if taxi
       if (user.role === "taxi") {
-        fetch(`/api/taxi/profile/${user.username}`)
+        fetch(`${apiBase}/api/taxi/profile/${user.username}`)
           .then((r) => r.json())
           .then((data) => {
             if (data.profile) {
@@ -152,7 +153,7 @@ export default function AccountSettings() {
   const handleSaveVehicle = async () => {
     setSavingVehicle(true);
     try {
-      const res = await fetch("/api/taxi/vehicle", {
+      const res = await fetch(apiBase + "/api/taxi/vehicle", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: user.username, ...vehicleData }),
@@ -172,7 +173,7 @@ export default function AccountSettings() {
     if (!newName.trim()) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/user/profile", {
+      const res = await fetch(apiBase + "/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: user.username, name: newName }),

@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -43,7 +44,7 @@ export default function ProviderDashboard() {
     const load = async () => {
       if (!user?.username) return;
       try {
-        const res = await fetch(`/api/services/provider/${encodeURIComponent(user.username)}`);
+        const res = await fetch(`${apiBase}/api/services/provider/${encodeURIComponent(user.username)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'No se pudieron cargar tus servicios');
         setServices(data.services || []);
@@ -99,7 +100,7 @@ export default function ProviderDashboard() {
         locationLng,
         rating,
       };
-      const res = await fetch('/api/services', {
+      const res = await fetch(apiBase + '/api/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

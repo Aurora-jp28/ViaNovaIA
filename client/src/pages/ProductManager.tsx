@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
@@ -89,7 +90,7 @@ function ProductForm({
       const form = new FormData();
       form.append("mediaType", mediaType);
       form.append("file", mediaFile);
-      const res = await fetch(`/api/products/${existing.id}/media`, { method: "POST", body: form });
+      const res = await fetch(`${apiBase}/api/products/${existing.id}/media`, { method: "POST", body: form });
       const d = await res.json();
       if (!res.ok) throw new Error(d.message);
       
@@ -106,7 +107,7 @@ function ProductForm({
   const handleDeleteMedia = async (assetId: string) => {
     if (!existing?.id) return;
     try {
-      await fetch(`/api/products/${existing.id}/media/${assetId}`, { method: "DELETE" });
+      await fetch(`${apiBase}/api/products/${existing.id}/media/${assetId}`, { method: "DELETE" });
       onSave({ ...existing, media: (existing.media || []).filter(m => m.id !== assetId) });
       toast({ title: "Medio eliminado" });
     } catch (e: any) {
@@ -332,8 +333,8 @@ export default function ProductManager() {
     if (!user?.username) return;
     setLoading(true);
     Promise.all([
-      fetch(`/api/products/provider/${user.username}`).then(r => r.json()),
-      fetch(`/api/orders/provider/${user.username}`).then(r => r.json()),
+      fetch(`${apiBase}/api/products/provider/${user.username}`).then(r => r.json()),
+      fetch(`${apiBase}/api/orders/provider/${user.username}`).then(r => r.json()),
     ]).then(([pd, od]) => {
       setProducts(pd.products || []);
       setOrders(od.orders || []);
@@ -351,7 +352,7 @@ export default function ProductManager() {
 
   const handleDelete = async (id: string) => {
     if (!user?.username) return;
-    await fetch(`/api/products/${id}`, {
+    await fetch(`${apiBase}/api/products/${id}`, {
       method: "DELETE", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: user.username }),
     });
@@ -364,12 +365,12 @@ export default function ProductManager() {
     const form = new FormData();
     form.append("username", user.username);
     form.append("isActive", String(!product.is_active));
-    await fetch(`/api/products/${product.id}`, { method: "PATCH", body: form });
+    await fetch(`${apiBase}/api/products/${product.id}`, { method: "PATCH", body: form });
     setProducts(p => p.map(x => x.id === product.id ? { ...x, is_active: !x.is_active } : x));
   };
 
   const handleOrderStatus = async (id: string, status: string) => {
-    await fetch(`/api/orders/${id}/status`, {
+    await fetch(`${apiBase}/api/orders/${id}/status`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });

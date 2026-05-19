@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
@@ -40,7 +41,7 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
 
   useEffect(() => {
     // Fetch full product details including all media assets
-    fetch(`/api/products/provider/${product.provider_username}`)
+    fetch(`${apiBase}/api/products/provider/${product.provider_username}`)
       .then(r => r.json())
       .then(d => {
         const fullProduct = d.products?.find((p: any) => p.id === product.id);
@@ -58,7 +59,7 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
       .finally(() => setLoading(false));
 
     // Fetch availability slots
-    fetch(`/api/bookings/slots/${product.id}`)
+    fetch(`${apiBase}/api/bookings/slots/${product.id}`)
       .then(r => r.ok ? r.json() : [])
       .then(d => setSlots(d))
       .catch(() => setSlots([]));
@@ -79,7 +80,7 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
 
       // 1. Lock slot si hay sistema de reservas
       if (selectedSlotId) {
-        const lockRes = await fetch("/api/bookings/lock", {
+        const lockRes = await fetch(apiBase + "/api/bookings/lock", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slotId: selectedSlotId, units: 1 })
@@ -89,7 +90,7 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
         finalBookingId = lockData.booking.id;
 
         // 2. Simular pago y confirmar la reserva en lugar de ir a Stripe
-        const confirmRes = await fetch("/api/bookings/confirm", {
+        const confirmRes = await fetch(apiBase + "/api/bookings/confirm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ bookingId: finalBookingId })
@@ -103,7 +104,7 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
       }
 
       // Si no hay slots (fallback e-commerce normal), usar Stripe
-      const res = await fetch("/api/stripe/create-checkout-session", {
+      const res = await fetch(apiBase + "/api/stripe/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId: product.id, buyerUsername: user.username, quantity: 1 })

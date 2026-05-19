@@ -4,7 +4,7 @@ import { LogOut, User, Settings, Package, Building2, Utensils, TentTree, Car, Cl
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
 // Logos sin fondo (para el Navbar)
-import logoDefault from "../assets/Logo_principal-removebg-preview.png";
+import logoPrincipal from "../assets/Logo_principal-removebg-preview.png";
 import logoOcean   from "../assets/Logo_ocean-removebg-preview.png";
 import logoForest  from "../assets/Logo_forest-removebg-preview.png";
 import logoSunset  from "../assets/Logo_sunset-Photoroom.png";
@@ -40,7 +40,7 @@ export default function Navbar() {
       case 'ocean':   return logoOcean;
       case 'forest':  return logoForest;
       case 'sunset':  return logoSunset;
-      default:        return logoDefault; // light, dark, system
+      default:        return logoPrincipal; // light, dark, system, etc.
     }
   })();
 

@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star, Send, Loader2, MessageSquare, User } from "lucide-react";
@@ -73,7 +74,7 @@ export function ReviewForm({ rideId, authorUsername, targetUsername, authorRole,
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/reviews", {
+      const res = await fetch(apiBase + "/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -152,7 +153,7 @@ export function ReviewList({ username }: ReviewListProps) {
   const [loading, setLoading] = useState(true);
 
   useState(() => {
-    fetch(`/api/reviews/${username}`)
+    fetch(`${apiBase}/api/reviews/${username}`)
       .then((r) => r.json())
       .then((data) => {
         setReviews(data.reviews || []);

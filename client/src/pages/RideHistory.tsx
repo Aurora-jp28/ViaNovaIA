@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -120,7 +121,7 @@ export default function RideHistory() {
       .catch(() => setLoading(false));
 
     if (user?.username) {
-      fetch(`/api/chat/history?username=${encodeURIComponent(user.username)}`)
+      fetch(`${apiBase}/api/chat/history?username=${encodeURIComponent(user.username)}`)
         .then((r) => r.json())
         .then((data) => {
           if (Array.isArray(data)) {
@@ -144,7 +145,7 @@ export default function RideHistory() {
 
     Promise.all(
       completedIds.map(id =>
-        fetch(`/api/reviews/ride/${id}`).then(r => r.json())
+        fetch(`${apiBase}/api/reviews/ride/${id}`).then(r => r.json())
       )
     ).then(results => {
       const reviewed = new Set<string>();

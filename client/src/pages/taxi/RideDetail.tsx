@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 // ─────────────────────────────────────────────────────────────────────────────
 // client/src/pages/taxi/RideDetail.tsx
 // Vista de detalle del viaje con mapa Leaflet — /taxi/ride/:id
@@ -26,7 +27,7 @@ export default function RideDetail() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["ride", id],
-    queryFn: () => fetch(`/api/rides/${id}`).then((r) => r.json()) as Promise<{ ride: Ride }>,
+    queryFn: () => fetch(`${apiBase}/api/rides/${id}`).then((r) => r.json()) as Promise<{ ride: Ride }>,
     enabled: !!id,
     refetchInterval: 10_000,
   });

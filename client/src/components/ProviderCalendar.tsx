@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -42,7 +43,7 @@ export default function ProviderCalendar({ services }: ProviderCalendarProps) {
   const fetchSlots = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/bookings/slots/${selectedServiceId}`);
+      const res = await fetch(`${apiBase}/api/bookings/slots/${selectedServiceId}`);
       if (res.ok) {
         const data = await res.json();
         setSlots(data);
@@ -77,7 +78,7 @@ export default function ProviderCalendar({ services }: ProviderCalendarProps) {
         price: price ? parseInt(price) : selectedService?.price || 0,
       };
 
-      const res = await fetch("/api/bookings/slots", {
+      const res = await fetch(apiBase + "/api/bookings/slots", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)

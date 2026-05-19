@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Car, Star, Phone, MapPin, User, Loader2 } from "lucide-react";
@@ -16,8 +17,8 @@ export default function TaxiProfile({ username, compact = false }: TaxiProfilePr
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/users/${username}/profile`).then((r) => r.json()),
-      fetch(`/api/taxi/profile/${username}`).then((r) => r.json()),
+      fetch(`${apiBase}/api/users/${username}/profile`).then((r) => r.json()),
+      fetch(`${apiBase}/api/taxi/profile/${username}`).then((r) => r.json()),
     ])
       .then(([profileData, taxiProfileData]) => {
         setProfile(profileData.profile || null);

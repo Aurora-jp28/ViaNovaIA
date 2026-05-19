@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Clock, MailOpen, MapPin, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth";
@@ -27,7 +28,7 @@ export default function Notifications() {
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
+      await fetch(`${apiBase}/api/notifications/${id}/read`, { method: "PATCH" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [user?.username ? `/api/notifications?username=${encodeURIComponent(user.username)}` : null] });

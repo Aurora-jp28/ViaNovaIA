@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 // ─────────────────────────────────────────────────────────────────────────────
 // client/src/hooks/useTaxiDashboard.ts
 // Hook principal del dashboard del taxista

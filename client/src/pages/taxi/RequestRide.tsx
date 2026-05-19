@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -136,7 +137,7 @@ export default function RequestRide() {
   // ── Check for existing active ride ──────────────────────────────────────
   const { data: travelerData } = useQuery<{ activeRide: Ride | null; history: Ride[] }>({
     queryKey: ["rides", "traveler", username],
-    queryFn: () => fetch(`/api/rides/traveler/${username}`).then((r) => r.json()),
+    queryFn: () => fetch(`${apiBase}/api/rides/traveler/${username}`).then((r) => r.json()),
     refetchInterval: createdRideId ? 5000 : 30000,
     enabled: !!username,
   });
@@ -291,7 +292,7 @@ export default function RequestRide() {
         fare,
         distanceKm: Math.round(distanceKm * 10) / 10,
       };
-      const res = await fetch("/api/rides", {
+      const res = await fetch(apiBase + "/api/rides", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -311,7 +312,7 @@ export default function RequestRide() {
   // ── Cancel ride mutation ────────────────────────────────────────────────
   const cancelMutation = useMutation({
     mutationFn: async (rideId: string) => {
-      const res = await fetch(`/api/rides/${rideId}`, {
+      const res = await fetch(`${apiBase}/api/rides/${rideId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "cancelled" }),
@@ -537,7 +538,7 @@ export default function RequestRide() {
               <Button
                 onClick={handleSubmit}
                 disabled={createMutation.isPending || !originCoords || !destCoords}
-                className="w-full h-12 rounded-xl bg-gradient-to-r from-primary via-primary/90 to-emerald-500 text-white font-bold text-base
+                className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-base
                   shadow-[0_0_20px_rgba(var(--primary-rgb,99,102,241),0.3)]
                   hover:shadow-[0_0_30px_rgba(var(--primary-rgb,99,102,241),0.5)]
                   transition-all duration-300 gap-2"

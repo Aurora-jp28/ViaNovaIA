@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Image as ImageIcon, Loader2, Bot, Sparkles, MapPin, Hotel, UtensilsCrossed, Car, Ticket, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,7 @@ export default function Chatbot() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(apiBase + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,7 +108,7 @@ export default function Chatbot() {
         setMessages(prev => [...prev, newUserMsg]);
         setIsLoading(true);
         
-        const res = await fetch('/api/chat', {
+        const res = await fetch(apiBase + '/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -157,7 +158,7 @@ export default function Chatbot() {
     setIsLoading(true);
     
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(apiBase + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +199,7 @@ export default function Chatbot() {
 
       setIsLoading(true);
       try {
-        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const res = await fetch(apiBase + '/api/upload', { method: 'POST', body: form });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'Error de carga');
 
@@ -256,7 +257,7 @@ export default function Chatbot() {
     if (!items.length) return;
     setIsSendingBookings(true);
     try {
-      await fetch('/api/bookings/confirm', {
+      await fetch(apiBase + '/api/bookings/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -325,7 +326,7 @@ export default function Chatbot() {
           >
             <Button
               onClick={() => setIsOpen(true)}
-              className="h-16 w-16 rounded-full bg-gradient-to-tr from-primary to-yellow-300 text-black border-2 border-primary/20 p-0 overflow-hidden"
+              className="h-16 w-16 rounded-full bg-primary text-primary-foreground border-2 border-primary/20 p-0 overflow-hidden"
             >
               <Sparkles className="h-8 w-8 absolute opacity-50 blur-[2px] animate-pulse" />
               <img src={botLogo} alt="ViaNova Bot" className="h-12 w-12 object-contain relative z-10 drop-shadow-md" />

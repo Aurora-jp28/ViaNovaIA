@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -134,7 +135,7 @@ export default function Home() {
       const acc: LocationItem[] = [];
       for (const c of cats) {
         try {
-          const res = await fetch(`/api/services?category=${c}`);
+          const res = await fetch(`${apiBase}/api/services?category=${c}`);
           const data = await res.json();
           if (res.ok && Array.isArray(data.services)) {
             for (const s of data.services) {
@@ -533,7 +534,7 @@ export default function Home() {
                       className={`h-12 px-6 rounded-xl font-bold transition-all flex items-center gap-2 ${
                         showTaxiPanel
                           ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]'
-                          : 'bg-gradient-to-r from-primary via-primary/90 to-emerald-500 text-black shadow-[0_0_20px_rgba(255,215,0,0.3)] hover:shadow-[0_0_30px_rgba(255,215,0,0.5)]'
+                          : 'bg-primary text-primary-foreground shadow-[0_0_20px_rgba(255,215,0,0.3)] hover:shadow-[0_0_30px_rgba(255,215,0,0.5)]'
                       }`}
                     >
                       <Car className="h-5 w-5" />

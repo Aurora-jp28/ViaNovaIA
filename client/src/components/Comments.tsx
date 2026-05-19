@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,7 @@ export default function Comments({ locationId }: { locationId: string }) {
     const fetchComments = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/comments?locationId=${encodeURIComponent(locationId)}`);
+        const res = await fetch(`${apiBase}/api/comments?locationId=${encodeURIComponent(locationId)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || 'Error cargando comentarios');
         if (!ignore) setComments(data.comments || []);
@@ -65,7 +66,7 @@ export default function Comments({ locationId }: { locationId: string }) {
         content,
         rating,
       };
-      const res = await fetch('/api/comments', {
+      const res = await fetch(apiBase + '/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -85,7 +86,7 @@ export default function Comments({ locationId }: { locationId: string }) {
 
   const handleDelete = async (id: string, authorUsername: string) => {
     try {
-      const res = await fetch(`/api/comments/${id}`, {
+      const res = await fetch(`${apiBase}/api/comments/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: authorUsername }),

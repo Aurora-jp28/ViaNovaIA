@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Capacitor } from '@capacitor/core';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -7,12 +8,24 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+export const getBaseUrl = () => {
+  const isApp = (typeof window !== 'undefined' && Capacitor.isNativePlatform()) || 
+                (typeof navigator !== 'undefined' && navigator.userAgent.includes('wv'));
+  if (isApp) {
+    return "https://via-nova-ia.vercel.app";
+  }
+  return "";
+};
+
+export const apiBase = getBaseUrl();
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const finalUrl = url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
+  const res = await fetch(finalUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -29,7 +42,9 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = queryKey.join("/") as string;
+    const finalUrl = url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
+    const res = await fetch(finalUrl, {
       credentials: "include",
     });
 

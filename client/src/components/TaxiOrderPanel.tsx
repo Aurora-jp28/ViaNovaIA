@@ -1,3 +1,4 @@
+import { apiBase } from "@/lib/queryClient";
 // ─────────────────────────────────────────────────────────────────────────────
 // TaxiOrderPanel.tsx
 // Panel integrado para ordenar un taxi desde la previsualización de un local
@@ -157,7 +158,7 @@ export default function TaxiOrderPanel({
 
     const fetchTaxis = async () => {
       try {
-        const res = await fetch('/api/taxi/nearby');
+        const res = await fetch(apiBase + '/api/taxi/nearby');
         const data = await res.json();
         if (cancelled) return;
         const drivers: SimulatedTaxi[] = (data.drivers || [])
@@ -187,7 +188,7 @@ export default function TaxiOrderPanel({
     if (!rideId || !username) return;
     const poll = setInterval(async () => {
       try {
-        const res = await fetch(`/api/rides/traveler/${username}`);
+        const res = await fetch(`${apiBase}/api/rides/traveler/${username}`);
         const data = await res.json();
         
         if (data.activeRide && data.activeRide.id === rideId) {
@@ -239,7 +240,7 @@ export default function TaxiOrderPanel({
         fare,
         distanceKm: Math.round(displayDistance * 10) / 10,
       };
-      const res = await fetch("/api/rides", {
+      const res = await fetch(apiBase + "/api/rides", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -262,7 +263,7 @@ export default function TaxiOrderPanel({
     if (!rideId) return;
     setCancelling(true);
     try {
-      await fetch(`/api/rides/${rideId}`, {
+      await fetch(`${apiBase}/api/rides/${rideId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "cancelled" }),
@@ -375,7 +376,7 @@ export default function TaxiOrderPanel({
             <Button
               onClick={handleSubmit}
               disabled={submitting || !userLocation || fare <= 0}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-primary via-primary/90 to-emerald-500 text-black font-bold text-base
+              className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-base
                 shadow-[0_0_20px_rgba(255,215,0,0.3)]
                 hover:shadow-[0_0_30px_rgba(255,215,0,0.5)]
                 transition-all duration-300 gap-2"
