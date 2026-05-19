@@ -115,7 +115,7 @@ function generateToken(user: any) {
 
 // Middleware de Autenticación
 export function requireAuth(req: any, res: any, next: any) {
-  const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
+  const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
   if (!token) {
     return res.status(401).json({ message: "No autenticado" });
   }

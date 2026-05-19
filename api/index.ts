@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "../server/routes/index.js";
 import { createServer } from "http";
 
@@ -8,6 +9,7 @@ const httpServer = createServer(app);
 
 app.set("trust proxy", true);
 app.use(cors());
+app.use(cookieParser(process.env.SESSION_SECRET || "via_nova_secret_key_2026"));
 
 // Required for some webhooks or parsing
 declare module "http" {
