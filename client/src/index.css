@@ -2,31 +2,28 @@
 @import "tw-animate-css";
 
 @theme inline {
-  /* VIANova Theme - Dark & Gold */
-  --color-background: hsl(0 0% 5%); /* Almost Black */
-  --color-foreground: hsl(0 0% 95%); /* Off-white */
+  /* VIANova Theme - Dynamic */
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   
-  --color-primary: hsl(45 100% 50%); /* Gold/Yellow */
-  --color-primary-foreground: hsl(0 0% 0%); /* Black text on gold */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
   
-  --color-secondary: hsl(0 0% 15%); /* Dark Gray */
-  --color-secondary-foreground: hsl(0 0% 100%);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-fg);
   
-  --color-accent: hsl(45 90% 60%); /* Lighter Gold */
-  --color-accent-foreground: hsl(0 0% 0%);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-fg);
   
-  --color-card: hsl(0 0% 8%); /* Slightly lighter than bg */
-  --color-card-foreground: hsl(0 0% 95%);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-fg);
   
-  --color-border: hsl(0 0% 20%);
-  --color-input: hsl(0 0% 20%);
-  --color-ring: hsl(45 100% 50%);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   
-  --color-muted: hsl(0 0% 15%);
-  --color-muted-foreground: hsl(0 0% 60%);
-  
-  --color-destructive: hsl(0 62.8% 30.6%);
-  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-fg);
   
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
@@ -34,6 +31,98 @@
   
   --font-sans: "Inter", sans-serif;
   --font-heading: "Poppins", sans-serif;
+}
+
+@layer base {
+  :root {
+    --bg: hsl(0 0% 100%);
+    --fg: hsl(0 0% 5%);
+    --primary: hsl(45 100% 50%);
+    --primary-fg: hsl(0 0% 0%);
+    --secondary: hsl(0 0% 95%);
+    --secondary-fg: hsl(0 0% 10%);
+    --accent: hsl(45 90% 60%);
+    --accent-fg: hsl(0 0% 0%);
+    --card: hsl(0 0% 98%);
+    --card-fg: hsl(0 0% 5%);
+    --border: hsl(0 0% 90%);
+    --input: hsl(0 0% 90%);
+    --ring: hsl(45 100% 50%);
+    --muted: hsl(0 0% 95%);
+    --muted-fg: hsl(0 0% 40%);
+  }
+
+  .dark {
+    --bg: hsl(0 0% 5%);
+    --fg: hsl(0 0% 95%);
+    --primary: hsl(45 100% 50%);
+    --primary-fg: hsl(0 0% 0%);
+    --secondary: hsl(0 0% 15%);
+    --secondary-fg: hsl(0 0% 100%);
+    --accent: hsl(45 90% 60%);
+    --accent-fg: hsl(0 0% 0%);
+    --card: hsl(0 0% 8%);
+    --card-fg: hsl(0 0% 95%);
+    --border: hsl(0 0% 20%);
+    --input: hsl(0 0% 20%);
+    --ring: hsl(45 100% 50%);
+    --muted: hsl(0 0% 15%);
+    --muted-fg: hsl(0 0% 60%);
+  }
+
+  .sunset {
+    --bg: hsl(15 40% 10%);
+    --fg: hsl(30 30% 90%);
+    --primary: hsl(20 90% 60%);
+    --primary-fg: hsl(0 0% 100%);
+    --secondary: hsl(15 30% 15%);
+    --secondary-fg: hsl(30 30% 90%);
+    --accent: hsl(10 80% 65%);
+    --accent-fg: hsl(0 0% 100%);
+    --card: hsl(15 35% 12%);
+    --card-fg: hsl(30 30% 90%);
+    --border: hsl(15 30% 25%);
+    --input: hsl(15 30% 25%);
+    --ring: hsl(20 90% 60%);
+    --muted: hsl(15 30% 20%);
+    --muted-fg: hsl(30 20% 65%);
+  }
+
+  .ocean {
+    --bg: hsl(220 50% 10%);
+    --fg: hsl(210 30% 90%);
+    --primary: hsl(200 90% 50%);
+    --primary-fg: hsl(0 0% 100%);
+    --secondary: hsl(220 40% 15%);
+    --secondary-fg: hsl(210 30% 90%);
+    --accent: hsl(190 80% 55%);
+    --accent-fg: hsl(0 0% 100%);
+    --card: hsl(220 45% 12%);
+    --card-fg: hsl(210 30% 90%);
+    --border: hsl(220 40% 25%);
+    --input: hsl(220 40% 25%);
+    --ring: hsl(200 90% 50%);
+    --muted: hsl(220 40% 20%);
+    --muted-fg: hsl(210 20% 65%);
+  }
+
+  .forest {
+    --bg: hsl(140 40% 10%);
+    --fg: hsl(130 30% 90%);
+    --primary: hsl(140 60% 45%);
+    --primary-fg: hsl(0 0% 100%);
+    --secondary: hsl(140 30% 15%);
+    --secondary-fg: hsl(130 30% 90%);
+    --accent: hsl(110 50% 50%);
+    --accent-fg: hsl(0 0% 100%);
+    --card: hsl(140 35% 12%);
+    --card-fg: hsl(130 30% 90%);
+    --border: hsl(140 30% 25%);
+    --input: hsl(140 30% 25%);
+    --ring: hsl(140 60% 45%);
+    --muted: hsl(140 30% 20%);
+    --muted-fg: hsl(130 20% 65%);
+  }
 }
 
 @layer base {

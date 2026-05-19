@@ -168,6 +168,59 @@ export const paymentMethods = pgTable("payment_methods", {
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
+// ── SISTEMA DE DISPONIBILIDAD Y RESERVAS (FASE 3) ────────────────────────────
+export const availabilitySlots = pgTable("availability_slots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceId: varchar("service_id").notNull().references(() => services.id),
+  providerUsername: text("provider_username").notNull(),
+  slotType: text("slot_type").notNull(), // 'room' | 'table' | 'hour'
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  capacity: integer("capacity").notNull(), // Total inventory (e.g. 5 tables, 10 rooms)
+  booked: integer("booked").default(0), // Currently booked units
+  price: integer("price"), // Override base service price if needed
+  status: text("status").default("available"), // 'available' | 'locked'
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const bookings = pgTable("bookings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slotId: varchar("slot_id").notNull().references(() => availabilitySlots.id),
+  travelerUsername: text("traveler_username").notNull(),
+  providerUsername: text("provider_username").notNull(),
+  units: integer("units").notNull().default(1), // e.g. 2 rooms, 1 table
+  totalPrice: integer("total_price").notNull(),
+  status: text("status").default("pending"), // 'pending' | 'reserved_temp' | 'confirmed' | 'cancelled'
+  lockedUntil: timestamp("locked_until"), // For optimistic locking (5 mins)
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+// ── RED SOCIAL (FASE 4) ───────────────────────────────────────────────────────
+export const posts = pgTable("posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  authorUsername: text("author_username").notNull(),
+  content: text("content"),
+  mediaUrl: text("media_url"), // Image, Video, or 360/3D model URL
+  mediaType: text("media_type"), // 'image' | 'video' | '360' | '3d'
+  locationId: varchar("location_id"), // Optional reference to a service/location
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const postLikes = pgTable("post_likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => posts.id),
+  username: text("username").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const postComments = pgTable("post_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => posts.id),
+  username: text("username").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -260,6 +313,10 @@ export const notifications = pgTable("notifications", {
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications);
+export const insertAvailabilitySlotSchema = createInsertSchema(availabilitySlots);
+export const insertBookingSchema = createInsertSchema(bookings);
+export const insertPostSchema = createInsertSchema(posts);
+export const insertPostCommentSchema = createInsertSchema(postComments);
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
@@ -280,7 +337,12 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type UserRoleRecord = typeof userRoles.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type PaymentMethod = typeof paymentMethods.$inferSelect;
-export type Notification = typeof notifications.$inferSelect;
+export const Notification = typeof notifications.$inferSelect;
+export type AvailabilitySlot = typeof availabilitySlots.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
+export type Post = typeof posts.$inferSelect;
+export type PostLike = typeof postLikes.$inferSelect;
+export type PostComment = typeof postComments.$inferSelect;
 
 
 export type LocationItem = {

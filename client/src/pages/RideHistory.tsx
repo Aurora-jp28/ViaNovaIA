@@ -23,12 +23,16 @@ const statusLabels: Record<string, { label: string; color: string; icon: React.R
   pending: { label: "Pendiente", color: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20", icon: <Clock className="h-4 w-4 text-yellow-400" /> },
   accepted: { label: "Aceptado", color: "bg-blue-500/15 text-blue-400 border-blue-500/20", icon: <Car className="h-4 w-4 text-blue-400" /> },
   in_progress: { label: "En curso", color: "bg-primary/15 text-primary border-primary/20", icon: <Navigation className="h-4 w-4 text-primary" /> },
+  confirmed: { label: "Confirmado (Pago Pendiente)", color: "bg-purple-500/15 text-purple-400 border-purple-500/20", icon: <DollarSign className="h-4 w-4 text-purple-400" /> },
 };
 
-interface RideItem {
+interface HistoryItem {
   id: string;
+  type: "ride" | "service_booking"; // 'ride' para taxis, 'service_booking' para hoteles/restaurantes
+  serviceCategory?: string; // e.g., 'hotel', 'restaurant'
+  serviceName?: string;
   travelerUsername: string;
-  taxiUsername: string | null;
+  providerUsername: string | null;
   originAddress: string | null;
   destinationAddress: string;
   fare: number;
@@ -41,14 +45,18 @@ interface RideItem {
 export default function RideHistory() {
   const { user } = useAuth();
   const [_, setLocation] = useLocation();
-  const [rides, setRides] = useState<RideItem[]>([]);
+  const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "completed" | "cancelled">("all");
-  const [reviewingRide, setReviewingRide] = useState<string | null>(null);
-  const [reviewedRides, setReviewedRides] = useState<Set<string>>(new Set());
-  const [expandedRide, setExpandedRide] = useState<string | null>(null);
-  const [rideReviews, setRideReviews] = useState<Record<string, any[]>>({});
+  const [filter, setFilter] = useState<"all" | "completed" | "cancelled" | "confirmed">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "ride" | "service">("all");
+  const [reviewingItem, setReviewingItem] = useState<string | null>(null);
+  const [reviewedItems, setReviewedItems] = useState<Set<string>>(new Set());
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [itemReviews, setItemReviews] = useState<Record<string, any[]>>({});
   const [chatHistory, setChatHistory] = useState<any[]>([]);
+
+  // Payment mock state
+  const [processingPayment, setProcessingPayment] = useState<string | null>(null);
 
   const isTaxi = user?.role === "taxi";
 
@@ -61,11 +69,52 @@ export default function RideHistory() {
     fetch(endpoint)
       .then((r) => r.json())
       .then((data) => {
-        // Combine active + history, show all rides
-        const allRides: RideItem[] = [];
-        if (data.activeRide) allRides.push(data.activeRide);
-        if (data.history) allRides.push(...data.history);
-        setRides(allRides);
+        // Combine active + history, show all items
+        const allItems: HistoryItem[] = [];
+        const mapRide = (r: any): HistoryItem => ({
+          ...r,
+          type: "ride",
+          providerUsername: r.taxiUsername,
+        });
+
+        if (data.activeRide) allItems.push(mapRide(data.activeRide));
+        if (data.history) allItems.push(...data.history.map(mapRide));
+
+        // MOCK: Add some fake service bookings so the user can see the structure
+        if (!isTaxi) {
+          allItems.push({
+            id: "mock_hotel_1",
+            type: "service_booking",
+            serviceCategory: "hotel",
+            serviceName: "Hotel El Dorado Premium",
+            travelerUsername: user.username,
+            providerUsername: "hotel_dorado",
+            originAddress: null,
+            destinationAddress: "Habitación Doble - 3 Noches",
+            fare: 450000,
+            status: "confirmed", // requires payment
+            createdAt: new Date(Date.now() - 86400000).toISOString(),
+            completedAt: null,
+            startedAt: null,
+          });
+          allItems.push({
+            id: "mock_rest_1",
+            type: "service_booking",
+            serviceCategory: "restaurant",
+            serviceName: "Restaurante La Casona",
+            travelerUsername: user.username,
+            providerUsername: "la_casona",
+            originAddress: null,
+            destinationAddress: "Reserva Mesa para 4 - Cena",
+            fare: 120000,
+            status: "completed",
+            createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+            completedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+            startedAt: null,
+          });
+        }
+
+        setItems(allItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -85,12 +134,12 @@ export default function RideHistory() {
           setChatHistory([]);
         });
     }
-  }, [user?.username, user?.role]);
+  }, [user?.username, user?.role, isTaxi]);
 
-  // Check which rides user has already reviewed
+  // Check which items user has already reviewed
   useEffect(() => {
-    if (!user || rides.length === 0) return;
-    const completedIds = rides.filter(r => r.status === "completed").map(r => r.id);
+    if (!user || items.length === 0) return;
+    const completedIds = items.filter(r => r.status === "completed" && r.type === "ride").map(r => r.id);
     if (completedIds.length === 0) return;
 
     Promise.all(
@@ -108,24 +157,33 @@ export default function RideHistory() {
         );
         if (hasMyReview) reviewed.add(rideId);
       });
-      setReviewedRides(reviewed);
-      setRideReviews(reviewMap);
+      setReviewedItems(reviewed);
+      setItemReviews(reviewMap);
     });
-  }, [rides, user?.username]);
+  }, [items, user?.username]);
 
   if (!user) {
     setLocation("/login");
     return null;
   }
 
-  const filteredRides = rides.filter(r => {
-    if (filter === "all") return true;
-    return r.status === filter;
+  const filteredItems = items.filter(r => {
+    if (filter !== "all" && r.status !== filter) return false;
+    if (typeFilter !== "all" && ((typeFilter === "ride" && r.type !== "ride") || (typeFilter === "service" && r.type !== "service_booking"))) return false;
+    return true;
   });
 
-  const completedCount = rides.filter(r => r.status === "completed").length;
-  const cancelledCount = rides.filter(r => r.status === "cancelled").length;
-  const totalEarned = rides.filter(r => r.status === "completed").reduce((s, r) => s + r.fare, 0);
+  const completedCount = items.filter(r => r.status === "completed").length;
+  const cancelledCount = items.filter(r => r.status === "cancelled").length;
+  const totalEarned = items.filter(r => r.status === "completed").reduce((s, r) => s + r.fare, 0);
+
+  const handlePayService = (id: string) => {
+    setProcessingPayment(id);
+    setTimeout(() => {
+      setItems(prev => prev.map(i => i.id === id ? { ...i, status: "completed" } : i));
+      setProcessingPayment(null);
+    }, 2000);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -146,9 +204,9 @@ export default function RideHistory() {
                 <Clock className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Historial de Viajes y Chats</h1>
+                <h1 className="text-2xl font-bold">Historial de Reservas y Viajes</h1>
                 <p className="text-sm text-muted-foreground">
-                  {isTaxi ? "Viajes realizados como conductor" : "Tus viajes como pasajero"}
+                  {isTaxi ? "Viajes realizados como conductor" : "Tus viajes, hospedajes y reservas"}
                 </p>
               </div>
             </div>
@@ -170,11 +228,12 @@ export default function RideHistory() {
           </div>
 
           {/* Filter tabs */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             {([
-              { key: "all", label: "Todos", count: rides.length },
+              { key: "all", label: "Todos", count: items.length },
               { key: "completed", label: "Completados", count: completedCount },
               { key: "cancelled", label: "Cancelados", count: cancelledCount },
+              { key: "confirmed", label: "Por Pagar", count: items.filter(i => i.status === "confirmed").length },
             ] as const).map(f => (
               <button
                 key={f.key}
@@ -188,61 +247,82 @@ export default function RideHistory() {
                 {f.label} ({f.count})
               </button>
             ))}
+            
+            <div className="w-px h-6 bg-border/40 my-auto mx-2" />
+            
+            {([
+              { key: "all", label: "Cualquier Tipo" },
+              { key: "ride", label: "Taxis" },
+              { key: "service", label: "Servicios/Hoteles" },
+            ] as const).map(f => (
+              <button
+                key={f.key}
+                onClick={() => setTypeFilter(f.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  typeFilter === f.key
+                    ? "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                    : "bg-secondary/30 text-muted-foreground border border-border/30 hover:bg-secondary/50"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
 
-          {/* Rides list */}
+          {/* Items list */}
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : filteredRides.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <div className="bg-card border border-border/40 rounded-2xl p-12 text-center">
               <Car className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No hay viajes para mostrar</p>
+              <p className="text-sm text-muted-foreground">No hay registros para mostrar</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredRides.map((ride) => {
-                const st = statusLabels[ride.status] || statusLabels.pending;
-                const otherUser = isTaxi ? ride.travelerUsername : (ride.taxiUsername || "Sin asignar");
-                const isExpanded = expandedRide === ride.id;
-                const hasReviewed = reviewedRides.has(ride.id);
-                const isReviewing = reviewingRide === ride.id;
-                const reviews = rideReviews[ride.id] || [];
+              {filteredItems.map((item) => {
+                const st = statusLabels[item.status] || statusLabels.pending;
+                const otherUser = isTaxi ? item.travelerUsername : (item.providerUsername || "Sin asignar");
+                const isExpanded = expandedItem === item.id;
+                const hasReviewed = reviewedItems.has(item.id);
+                const isReviewing = reviewingItem === item.id;
+                const reviews = itemReviews[item.id] || [];
+                const isService = item.type === "service_booking";
 
                 return (
                   <motion.div
-                    key={ride.id}
+                    key={item.id}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-card border border-border/40 rounded-2xl overflow-hidden hover:border-border/60 transition-all"
                   >
                     {/* Main row */}
                     <button
-                      onClick={() => setExpandedRide(isExpanded ? null : ride.id)}
+                      onClick={() => setExpandedItem(isExpanded ? null : item.id)}
                       className="w-full text-left p-4 flex items-center gap-4"
                     >
                       {/* Status icon */}
-                      <div className={`p-2.5 rounded-xl ${ride.status === "completed" ? "bg-green-500/10" : ride.status === "cancelled" ? "bg-red-500/10" : "bg-primary/10"}`}>
-                        {st.icon}
+                      <div className={`p-2.5 rounded-xl ${item.status === "completed" ? "bg-green-500/10" : item.status === "cancelled" ? "bg-red-500/10" : "bg-primary/10"}`}>
+                        {isService ? <Star className={`h-4 w-4 ${st.color.split(' ')[1]}`} /> : st.icon}
                       </div>
 
-                      {/* Ride info */}
+                      {/* item info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-semibold truncate">{ride.destinationAddress}</p>
+                          <p className="text-sm font-semibold truncate">{isService ? item.serviceName : item.destinationAddress}</p>
                           <Badge className={`text-[10px] shrink-0 ${st.color}`}>{st.label}</Badge>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {new Date(ride.completedAt || ride.createdAt).toLocaleDateString("es-CO", {
+                            {new Date(item.completedAt || item.createdAt).toLocaleDateString("es-CO", {
                               day: "numeric", month: "short", year: "numeric",
                               hour: "2-digit", minute: "2-digit",
                             })}
                           </span>
                           <span className="flex items-center gap-1">
-                            {isTaxi ? <MapPin className="h-3 w-3" /> : <Car className="h-3 w-3" />}
+                            {isService ? <Star className="h-3 w-3" /> : (isTaxi ? <MapPin className="h-3 w-3" /> : <Car className="h-3 w-3" />)}
                             {otherUser}
                           </span>
                         </div>
@@ -250,7 +330,7 @@ export default function RideHistory() {
 
                       {/* Fare + expand */}
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-sm font-bold text-primary">{fmt(ride.fare)}</span>
+                        <span className="text-sm font-bold text-primary">{fmt(item.fare)}</span>
                         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                       </div>
                     </button>
@@ -265,45 +345,75 @@ export default function RideHistory() {
                           className="overflow-hidden"
                         >
                           <div className="px-4 pb-4 border-t border-border/30 pt-3 space-y-3">
-                            {/* Route detail */}
+                            {/* Route/Service detail */}
                             <div className="grid grid-cols-2 gap-3">
-                              <div className="p-3 rounded-xl bg-secondary/20 border border-border/30">
-                                <p className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
-                                  <MapPin className="h-2.5 w-2.5 text-green-400" /> Origen
-                                </p>
-                                <p className="text-xs font-medium mt-1 line-clamp-2">{ride.originAddress || "N/A"}</p>
-                              </div>
-                              <div className="p-3 rounded-xl bg-secondary/20 border border-border/30">
-                                <p className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
-                                  <Navigation className="h-2.5 w-2.5 text-red-400" /> Destino
-                                </p>
-                                <p className="text-xs font-medium mt-1 line-clamp-2">{ride.destinationAddress}</p>
-                              </div>
+                              {isService ? (
+                                <div className="col-span-2 p-3 rounded-xl bg-secondary/20 border border-border/30">
+                                  <p className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                    <Star className="h-2.5 w-2.5 text-primary" /> Detalles de Reserva
+                                  </p>
+                                  <p className="text-xs font-medium mt-1">{item.destinationAddress}</p>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="p-3 rounded-xl bg-secondary/20 border border-border/30">
+                                    <p className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                      <MapPin className="h-2.5 w-2.5 text-green-400" /> Origen
+                                    </p>
+                                    <p className="text-xs font-medium mt-1 line-clamp-2">{item.originAddress || "N/A"}</p>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-secondary/20 border border-border/30">
+                                    <p className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                      <Navigation className="h-2.5 w-2.5 text-red-400" /> Destino
+                                    </p>
+                                    <p className="text-xs font-medium mt-1 line-clamp-2">{item.destinationAddress}</p>
+                                  </div>
+                                </>
+                              )}
                             </div>
+
+                            {/* Payment Section for Confirmed Bookings */}
+                            {item.status === "confirmed" && (
+                              <div className="mt-4 p-4 rounded-xl border border-primary/30 bg-primary/5 flex flex-col gap-3">
+                                <p className="text-sm font-semibold text-primary">El proveedor ha confirmado tu solicitud.</p>
+                                <p className="text-xs text-muted-foreground mb-1">Para asegurar la reserva, por favor realiza el pago por {fmt(item.fare)}.</p>
+                                <Button 
+                                  onClick={() => handlePayService(item.id)}
+                                  disabled={processingPayment === item.id}
+                                  className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2 font-bold"
+                                >
+                                  {processingPayment === item.id ? (
+                                    <><Loader2 className="h-4 w-4 animate-spin" /> Procesando pago...</>
+                                  ) : (
+                                    <>Pagar con PSE (Simulado)</>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
 
                             {/* Time details */}
-                            <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                              {ride.createdAt && (
+                            <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground mt-2">
+                              {item.createdAt && (
                                 <span className="bg-secondary/30 px-2 py-1 rounded-lg">
-                                  Creado: {new Date(ride.createdAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                                  Creado: {new Date(item.createdAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               )}
-                              {ride.startedAt && (
+                              {item.startedAt && (
                                 <span className="bg-secondary/30 px-2 py-1 rounded-lg">
-                                  Iniciado: {new Date(ride.startedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                                  Iniciado: {new Date(item.startedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               )}
-                              {ride.completedAt && (
+                              {item.completedAt && (
                                 <span className="bg-green-500/10 text-green-400 px-2 py-1 rounded-lg">
-                                  Completado: {new Date(ride.completedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                                  Completado: {new Date(item.completedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               )}
                             </div>
 
-                            {/* Existing reviews for this ride */}
+                            {/* Existing reviews for this item */}
                             {reviews.length > 0 && (
-                              <div className="space-y-2">
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reseñas del viaje</p>
+                              <div className="space-y-2 mt-3">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reseñas</p>
                                 {reviews.map((rev: any) => (
                                   <div key={rev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-secondary/20 border border-border/30">
                                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -322,8 +432,8 @@ export default function RideHistory() {
                             )}
 
                             {/* Review button or form */}
-                            {ride.status === "completed" && (
-                              <>
+                            {item.status === "completed" && !isService && (
+                              <div className="mt-3">
                                 {hasReviewed ? (
                                   <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 rounded-xl px-3 py-2 border border-green-500/20">
                                     <CheckCircle className="h-3.5 w-3.5" />
@@ -331,28 +441,28 @@ export default function RideHistory() {
                                   </div>
                                 ) : isReviewing ? (
                                   <ReviewForm
-                                    rideId={ride.id}
+                                    rideId={item.id}
                                     authorUsername={user.username}
                                     targetUsername={otherUser}
                                     authorRole={isTaxi ? "taxi" : "traveler"}
                                     onSubmitted={() => {
-                                      setReviewingRide(null);
-                                      setReviewedRides(prev => new Set([...Array.from(prev), ride.id]));
+                                      setReviewingItem(null);
+                                      setReviewedItems(prev => new Set([...Array.from(prev), item.id]));
                                     }}
-                                    onCancel={() => setReviewingRide(null)}
+                                    onCancel={() => setReviewingItem(null)}
                                   />
                                 ) : (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setReviewingRide(ride.id)}
+                                    onClick={() => setReviewingItem(item.id)}
                                     className="w-full rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10"
                                   >
                                     <Star className="h-4 w-4" />
                                     Dejar Reseña
                                   </Button>
                                 )}
-                              </>
+                              </div>
                             )}
                           </div>
                         </motion.div>

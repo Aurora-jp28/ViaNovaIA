@@ -72,10 +72,14 @@ export default function Login() {
     }
   }, [loginDirect, setLocation]);
 
+  // No redirigir mientras se verifica la sesión con el backend (evita race condition)
+  if (loading) return null;
+
   if (isAuthenticated) {
     setLocation("/");
     return null;
   }
+
 
   const clearMessage = () => setMessage(null);
 
@@ -243,7 +247,7 @@ export default function Login() {
                 {/* Google */}
                 <div className="mb-8">
                   <Button variant="outline" className="w-full h-12 flex items-center justify-center gap-3 bg-secondary/30 hover:bg-secondary/60 border-border transition-all group" asChild>
-                    <a href="/api/auth/google">
+                    <a href={import.meta.env.DEV ? "/api/auth/google" : "https://via-nova-ia.vercel.app/api/auth/google"}>
                       <svg className="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24"><path d="M21.35 11.1h-9.17v2.92h5.28c-.23 1.34-.92 2.48-1.96 3.25v2.7h3.17c1.85-1.71 2.92-4.22 2.92-7.27 0-.63-.06-1.24-.18-1.82z" fill="#4285F4" /><path d="M12.18 22c2.63 0 4.83-.87 6.44-2.36l-3.17-2.7c-.88.59-2.01.94-3.27.94-2.52 0-4.66-1.7-5.43-3.99H3.48v2.5C5.09 19.9 8.35 22 12.18 22z" fill="#34A853" /><path d="M6.75 13.89c-.2-.6-.31-1.24-.31-1.89s.11-1.29.31-1.89V7.6H3.48C2.57 8.97 2 10.57 2 12.33s.57 3.36 1.48 4.73l3.27-2.5z" fill="#FBBC05" /><path d="M12.18 5.5c1.43 0 2.72.49 3.74 1.46l2.8-2.8C16.99 2.5 14.79 1.5 12.18 1.5 8.35 1.5 5.09 3.6 3.48 6.5l3.27 2.5c.77-2.29 2.91-3.99 5.43-3.99z" fill="#EA4335" /></svg>
                       <span className="font-medium">Continuar con Google</span>
                     </a>

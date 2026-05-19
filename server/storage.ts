@@ -40,6 +40,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(userId: string, hashedPassword: string): Promise<void>;
   updateUserRole(userId: string, role: string): Promise<User>;
+  updateUserProfile(userId: string, data: { name?: string; email?: string }): Promise<User>;
   upsertConversation(userId: string, title?: string): Promise<Conversation>;
   addMessage(conversationId: string, role: string, content: string, metadata?: any): Promise<Message>;
   getMessages(conversationId: string, limit?: number): Promise<Message[]>;
@@ -163,6 +164,14 @@ export class DbStorage implements IStorage {
   async updateUserRole(userId: string, role: string): Promise<User> {
     const db = getDb();
     const rows = await db.update(users).set({ role: role as any, roleChangedAt: new Date() }).where(eq(users.id, userId)).returning();
+    if (!rows.length) throw new Error("User not found");
+    return rows[0];
+  }
+
+  async updateUserProfile(userId: string, data: { name?: string; email?: string }): Promise<User> {
+    const db = getDb();
+    const rows = await db.update(users).set(data).where(eq(users.id, userId)).returning();
+    if (!rows.length) throw new Error("User not found");
     return rows[0];
   }
 

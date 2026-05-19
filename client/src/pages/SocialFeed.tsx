@@ -30,7 +30,11 @@ interface Comment {
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 function timeAgo(iso: string) {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  // Ensure the timestamp is treated as UTC if it doesn't specify a timezone
+  const dateStr = iso.endsWith("Z") ? iso : `${iso}Z`;
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  
+  if (diff < 0) return "ahora"; // Handle minor clock skews
   if (diff < 60) return "ahora";
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -310,15 +314,46 @@ function CreatePostModal({ onClose, onCreated, username }: { onClose: () => void
     if (!caption.trim() && !mediaFile) return;
     setLoading(true);
     try {
-      const form = new FormData();
-      form.append("username", username);
-      if (caption.trim()) form.append("caption", caption.trim());
-      if (mediaFile) { form.append("media", mediaFile); form.append("mediaType", mediaType); }
+      let uploadedUrl = null;
+      if (mediaFile) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", mediaFile);
+        uploadForm.append("category", "social");
+        uploadForm.append("userId", username);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: uploadForm });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.message || "Failed to upload file");
+        uploadedUrl = uploadData.url;
+      }
 
-      const r = await fetch("/api/social/posts", { method: "POST", body: form });
+      const postBody = {
+        content: caption.trim(),
+        mediaUrl: uploadedUrl,
+        mediaType: mediaType
+      };
+
+      const r = await fetch("/api/social/posts", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(postBody) 
+      });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message);
-      onCreated(d.post);
+      
+      // Remapear al formato frontend esperado
+      const frontendPost = {
+        id: d.id,
+        username: username,
+        caption: d.content,
+        media_url: d.mediaUrl,
+        media_type: d.mediaType,
+        likes_count: 0,
+        comments_count: 0,
+        created_at: d.createdAt,
+        avatar_url: null
+      };
+
+      onCreated(frontendPost);
       toast({ title: "¡Publicado! 🎉" });
       onClose();
     } catch (e: any) {
@@ -417,23 +452,46 @@ export default function SocialFeed() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false); // Ref para evitar doble fetch sin romper useCallback
 
   const fetchFeed = useCallback(async (reset = false) => {
-    if (loading) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
-      const cur = reset ? null : cursor;
-      const url = `/api/social/feed?limit=8${cur ? `&cursor=${encodeURIComponent(cur)}` : ""}`;
-      const r = await fetch(url);
-      const d = await r.json();
-      const newPosts: Post[] = d.posts || [];
-      setPosts(prev => reset ? newPosts : [...prev, ...newPosts]);
-      setCursor(d.nextCursor || null);
-      setHasMore(d.hasMore ?? false);
+      const r = await fetch(`/api/social/posts`, { credentials: 'include' });
+      const data = await r.json();
+
+      if (!Array.isArray(data)) {
+        console.warn("[SocialFeed] Backend devolvió no-array:", data);
+        if (reset) setPosts([]);
+        setHasMore(false);
+        return;
+      }
+
+      // Soportar campos camelCase (alias) Y snake_case (directo de BD)
+      const mappedPosts: Post[] = data.map((p: any) => ({
+        id: p.id,
+        username: p.authorUsername ?? p.username ?? 'Anónimo',
+        caption: p.content ?? p.caption ?? '',
+        media_url: p.mediaUrl ?? p.media_url ?? null,
+        media_type: p.mediaType ?? p.media_type ?? 'image',
+        likes_count: p.likesCount ?? p.likes_count ?? p.likes?.length ?? 0,
+        comments_count: p.commentsCount ?? p.comments_count ?? p.comments?.length ?? 0,
+        created_at: p.createdAt ?? p.created_at ?? new Date().toISOString(),
+        avatar_url: p.authorAvatar ?? p.avatar_url ?? null,
+      }));
+
+      setPosts(prev => reset ? mappedPosts : [...prev, ...mappedPosts]);
+      setHasMore(false);
+    } catch (err) {
+      console.error("[SocialFeed] Error al cargar posts:", err);
+      if (reset) setPosts([]);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [cursor, loading]);
+  }, []); // Sin dependencias — usa ref para la guard
 
   // Initial load
   useEffect(() => { fetchFeed(true); }, []);

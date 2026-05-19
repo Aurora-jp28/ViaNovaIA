@@ -8,7 +8,7 @@ export interface User {
   name?: string;
   email?: string;
   roleChangedAt?: string | null;
-  roles?: UserRole[]; // lista de roles disponibles del usuario
+  roles?: UserRole[];
 }
 
 interface AuthState {
@@ -35,254 +35,273 @@ interface AuthState {
   refreshUser: () => void;
 }
 
-export const useAuth = create<AuthState>((set, get) => ({
-  user: localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null,
-  isAuthenticated: !!localStorage.getItem('user'),
-  loading: false,
-
-  login: async (username: string, password: string) => {
-    set({ loading: true });
+export const useAuth = create<AuthState>((set, get) => {
+  // Verify session with backend on init — sets loading=false when done
+  setTimeout(async () => {
+    const existingUser = localStorage.getItem('user');
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        set({ loading: false });
-        return { ok: false, message: data.message || 'Error al iniciar sesión' };
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        set({ user: data.user, isAuthenticated: true, loading: false });
+        localStorage.setItem('user', JSON.stringify(data.user));
+        get().fetchRoles();
+      } else {
+        // Solo limpiar sesión si el usuario NO estaba autenticado ya por localStorage
+        if (!existingUser) {
+          set({ user: null, isAuthenticated: false, loading: false });
+        } else {
+          // Hay sesión en localStorage pero la cookie no está — trust localStorage
+          set({ loading: false });
+        }
       }
-      const user: User = {
-        username: data.user.username,
-        role: data.user.role || 'traveler',
-        name: data.user.name,
-        email: data.user.email,
-        roleChangedAt: data.user.roleChangedAt,
-      };
-      localStorage.setItem('user', JSON.stringify(user));
-      set({ user, isAuthenticated: true, loading: false });
-      
-      // Fetch roles in background
-      get().fetchRoles();
-      
-      return { ok: true };
-    } catch (err: any) {
-      set({ loading: false });
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  loginDirect: (username: string, role: UserRole, name?: string, email?: string, roleChangedAt?: string | null) => {
-    const user: User = { username, role, name, email, roleChangedAt: roleChangedAt !== undefined ? roleChangedAt : undefined };
-    localStorage.setItem('user', JSON.stringify(user));
-    set({ user, isAuthenticated: true });
-    
-    // Fetch roles in background
-    get().fetchRoles();
-  },
-
-  register: async (data) => {
-    set({ loading: true });
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        set({ loading: false });
-        return { ok: false, message: result.message || 'Error al registrarse' };
-      }
-      const user: User = {
-        username: result.user.username,
-        role: result.user.role || 'traveler',
-        name: result.user.name,
-        email: result.user.email,
-        roles: ['traveler'],
-      };
-      localStorage.setItem('user', JSON.stringify(user));
-      set({ user, isAuthenticated: true, loading: false });
-      return { ok: true };
-    } catch (err: any) {
-      set({ loading: false });
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  logout: () => {
-    localStorage.removeItem('user');
-    set({ user: null, isAuthenticated: false });
-    // Clear all cached query data so no user A data leaks to user B
-    import('./queryClient').then(({ queryClient }) => queryClient.clear());
-  },
-
-  forgotPassword: async (email: string) => {
-    try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      return { ok: res.ok, message: data.message };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  verifyResetToken: async (token: string) => {
-    try {
-      const res = await fetch('/api/auth/verify-reset-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-      return { ok: data.valid === true, message: data.message };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  resetPassword: async (token: string, newPassword: string) => {
-    try {
-      const res = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, newPassword }),
-      });
-      const data = await res.json();
-      return { ok: res.ok, message: data.message };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  // Legacy: change role with cooldown (kept for backward compat)
-  changeRole: async (role: UserRole) => {
-    const user = get().user;
-    if (!user) return { ok: false, message: 'No autenticado' };
-    try {
-      const res = await fetch('/api/users/role', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user.username, role }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { ok: false, message: data.message };
-      const updated: User = {
-        ...user,
-        role: data.user.role,
-        roleChangedAt: data.user.roleChangedAt,
-      };
-      localStorage.setItem('user', JSON.stringify(updated));
-      set({ user: updated });
-      return { ok: true, message: 'Rol actualizado exitosamente' };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  // Nuevo: cambiar rol activo sin cooldown
-  switchActiveRole: async (role: UserRole) => {
-    const user = get().user;
-    if (!user) return { ok: false, message: 'No autenticado' };
-    try {
-      const res = await fetch('/api/users/active-role', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user.username, role }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { ok: false, message: data.message };
-      const updated: User = {
-        ...user,
-        role: data.user.role,
-      };
-      localStorage.setItem('user', JSON.stringify(updated));
-      set({ user: updated });
-      return { ok: true };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  // Agregar nuevo tipo de cuenta
-  addRole: async (role: UserRole, data?: Record<string, string>) => {
-    const user = get().user;
-    if (!user) return { ok: false, message: 'No autenticado' };
-    try {
-      const res = await fetch(`/api/users/${user.username}/roles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, ...data }),
-      });
-      const result = await res.json();
-      if (!res.ok) return { ok: false, message: result.message };
-      
-      // Update local user with new role
-      const updated: User = {
-        ...user,
-        role: result.user.role,
-        roles: [...(user.roles || []).filter(r => r !== role), role],
-      };
-      localStorage.setItem('user', JSON.stringify(updated));
-      set({ user: updated });
-      return { ok: true };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  // Eliminar tipo de cuenta
-  removeRole: async (role: UserRole) => {
-    const user = get().user;
-    if (!user) return { ok: false, message: 'No autenticado' };
-    try {
-      const res = await fetch(`/api/users/${user.username}/roles/${role}`, {
-        method: 'DELETE',
-      });
-      const result = await res.json();
-      if (!res.ok) return { ok: false, message: result.message };
-      
-      const updated: User = {
-        ...user,
-        role: result.user?.role || user.role,
-        roles: (user.roles || []).filter(r => r !== role),
-      };
-      localStorage.setItem('user', JSON.stringify(updated));
-      set({ user: updated });
-      return { ok: true };
-    } catch (err: any) {
-      return { ok: false, message: err.message || 'Error de conexión' };
-    }
-  },
-
-  // Fetch roles from API
-  fetchRoles: async () => {
-    const user = get().user;
-    if (!user) return [];
-    try {
-      const res = await fetch(`/api/users/${user.username}/roles`);
-      const data = await res.json();
-      const roleNames: UserRole[] = (data.roles || []).map((r: any) => r.role);
-      // Ensure at least current role is present
-      if (roleNames.length === 0) roleNames.push(user.role);
-      const updated = { ...user, roles: roleNames };
-      localStorage.setItem('user', JSON.stringify(updated));
-      set({ user: updated });
-      return roleNames;
     } catch {
-      return user.roles || [user.role];
+      // Error de red: no limpiar sesión, confiar en localStorage
+      set({ loading: false });
     }
-  },
+  }, 0);
 
-  refreshUser: () => {
-    const stored = localStorage.getItem('user');
-    if (stored) {
-      set({ user: JSON.parse(stored), isAuthenticated: true });
-    }
-  },
-}));
+  return {
+    user: localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null,
+    isAuthenticated: !!localStorage.getItem('user'),
+    loading: true,
+
+    login: async (username: string, password: string) => {
+      set({ loading: true });
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          set({ loading: false });
+          return { ok: false, message: data.message || 'Error al iniciar sesión' };
+        }
+        const user: User = {
+          username: data.user.username,
+          role: data.user.role || 'traveler',
+          name: data.user.name,
+          email: data.user.email,
+          roleChangedAt: data.user.roleChangedAt,
+        };
+        localStorage.setItem('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true, loading: false });
+        get().fetchRoles();
+        return { ok: true };
+      } catch (err: any) {
+        set({ loading: false });
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    loginDirect: (username: string, role: UserRole, name?: string, email?: string, roleChangedAt?: string | null) => {
+      const user: User = {
+        username,
+        role,
+        name,
+        email,
+        roleChangedAt: roleChangedAt !== undefined ? roleChangedAt : undefined,
+      };
+      localStorage.setItem('user', JSON.stringify(user));
+      set({ user, isAuthenticated: true, loading: false });
+      get().fetchRoles();
+    },
+
+    register: async (data) => {
+      set({ loading: true });
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          set({ loading: false });
+          return { ok: false, message: result.message || 'Error al registrarse' };
+        }
+        const user: User = {
+          username: result.user.username,
+          role: result.user.role || 'traveler',
+          name: result.user.name,
+          email: result.user.email,
+          roles: ['traveler'],
+        };
+        localStorage.setItem('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true, loading: false });
+        return { ok: true };
+      } catch (err: any) {
+        set({ loading: false });
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    logout: async () => {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      } catch {
+        // ignore
+      }
+      localStorage.removeItem('user');
+      set({ user: null, isAuthenticated: false });
+      const { queryClient } = await import('./queryClient');
+      queryClient.clear();
+    },
+
+    forgotPassword: async (email: string) => {
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        return { ok: res.ok, message: data.message };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    verifyResetToken: async (token: string) => {
+      try {
+        const res = await fetch('/api/auth/verify-reset-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json();
+        return { ok: data.valid === true, message: data.message };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    resetPassword: async (token: string, newPassword: string) => {
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, newPassword }),
+        });
+        const data = await res.json();
+        return { ok: res.ok, message: data.message };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    changeRole: async (role: UserRole) => {
+      const user = get().user;
+      if (!user) return { ok: false, message: 'No autenticado' };
+      try {
+        const res = await fetch('/api/users/role', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user.username, role }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { ok: false, message: data.message };
+        const updated: User = { ...user, role: data.user.role, roleChangedAt: data.user.roleChangedAt };
+        localStorage.setItem('user', JSON.stringify(updated));
+        set({ user: updated });
+        return { ok: true, message: 'Rol actualizado exitosamente' };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    switchActiveRole: async (role: UserRole) => {
+      const user = get().user;
+      if (!user) return { ok: false, message: 'No autenticado' };
+      try {
+        const res = await fetch('/api/users/active-role', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user.username, role }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { ok: false, message: data.message };
+        const updated: User = { ...user, role: data.user.role };
+        localStorage.setItem('user', JSON.stringify(updated));
+        set({ user: updated });
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    addRole: async (role: UserRole, data?: Record<string, string>) => {
+      const user = get().user;
+      if (!user) return { ok: false, message: 'No autenticado' };
+      try {
+        const res = await fetch(`/api/users/${user.username}/roles`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, ...data }),
+        });
+        const result = await res.json();
+        if (!res.ok) return { ok: false, message: result.message };
+        const updated: User = {
+          ...user,
+          role: result.user.role,
+          roles: [...(user.roles || []).filter((r) => r !== role), role],
+        };
+        localStorage.setItem('user', JSON.stringify(updated));
+        set({ user: updated });
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    removeRole: async (role: UserRole) => {
+      const user = get().user;
+      if (!user) return { ok: false, message: 'No autenticado' };
+      try {
+        const res = await fetch(`/api/users/${user.username}/roles/${role}`, {
+          method: 'DELETE',
+        });
+        const result = await res.json();
+        if (!res.ok) return { ok: false, message: result.message };
+        const updated: User = {
+          ...user,
+          role: result.user?.role || user.role,
+          roles: (user.roles || []).filter((r) => r !== role),
+        };
+        localStorage.setItem('user', JSON.stringify(updated));
+        set({ user: updated });
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, message: err.message || 'Error de conexión' };
+      }
+    },
+
+    fetchRoles: async () => {
+      const user = get().user;
+      if (!user) return [];
+      try {
+        const res = await fetch(`/api/users/${user.username}/roles`);
+        const data = await res.json();
+        const roleNames: UserRole[] = (data.roles || []).map((r: any) => r.role);
+        if (roleNames.length === 0) roleNames.push(user.role);
+        const updated = { ...user, roles: roleNames };
+        localStorage.setItem('user', JSON.stringify(updated));
+        set({ user: updated });
+        return roleNames;
+      } catch {
+        return user.roles || [user.role];
+      }
+    },
+
+    refreshUser: () => {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        set({ user: JSON.parse(stored), isAuthenticated: true });
+      }
+    },
+  };
+});

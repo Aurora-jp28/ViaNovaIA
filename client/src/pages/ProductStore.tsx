@@ -6,6 +6,10 @@ import { Loader2, Search, MapPin, ShoppingCart, Filter, Star, ChevronRight, X } 
 import { Button } from "@/components/ui/button";
 import { MediaGallery } from "@/components/media/MediaGallery";
 import { useLocation } from "wouter";
+import { Calendar } from "@/components/ui/calendar";
+import { es } from "date-fns/locale";
+import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 interface Product {
   id: string;
@@ -27,6 +31,12 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [checkingOut, setCheckingOut] = useState(false);
+  const { toast } = useToast();
+  
+  // Bookings state
+  const [slots, setSlots] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedSlotId, setSelectedSlotId] = useState<string>("");
 
   useEffect(() => {
     // Fetch full product details including all media assets
@@ -46,6 +56,12 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
         setMedia(formatted);
       })
       .finally(() => setLoading(false));
+
+    // Fetch availability slots
+    fetch(`/api/bookings/slots/${product.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setSlots(d))
+      .catch(() => setSlots([]));
   }, [product]);
 
   const handleCheckout = async () => {
@@ -53,26 +69,59 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
       setLocation("/login");
       return;
     }
+    if (!selectedSlotId && slots.length > 0) {
+      return toast({ title: "Atención", description: "Por favor selecciona un horario disponible", variant: "destructive" });
+    }
+
     setCheckingOut(true);
     try {
+      let finalBookingId = null;
+
+      // 1. Lock slot si hay sistema de reservas
+      if (selectedSlotId) {
+        const lockRes = await fetch("/api/bookings/lock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slotId: selectedSlotId, units: 1 })
+        });
+        const lockData = await lockRes.json();
+        if (!lockRes.ok) throw new Error(lockData.message || "No se pudo bloquear el espacio");
+        finalBookingId = lockData.booking.id;
+
+        // 2. Simular pago y confirmar la reserva en lugar de ir a Stripe
+        const confirmRes = await fetch("/api/bookings/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: finalBookingId })
+        });
+        
+        if (!confirmRes.ok) throw new Error("Error en el pago simulado");
+        
+        toast({ title: "¡Reserva Confirmada!", description: "El pago se procesó con éxito simulando PSE." });
+        setTimeout(() => onClose(), 2000);
+        return;
+      }
+
+      // Si no hay slots (fallback e-commerce normal), usar Stripe
       const res = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId: product.id,
-          buyerUsername: user.username,
-          quantity: 1
-        })
+        body: JSON.stringify({ productId: product.id, buyerUsername: user.username, quantity: 1 })
       });
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url; // Redirect to Stripe (or dummy callback)
-      }
-    } catch (e) {
-      console.error(e);
+      if (data.url) window.location.href = data.url;
+      
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
       setCheckingOut(false);
     }
   };
+
+  const slotsForSelectedDate = slots.filter(s => {
+    if (!selectedDate) return false;
+    const sDate = new Date(s.startTime);
+    return sDate.getDate() === selectedDate.getDate() && sDate.getMonth() === selectedDate.getMonth();
+  });
 
   return (
     <motion.div 
@@ -137,12 +186,55 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
             </div>
 
             <div className="mt-8 pt-8 border-t border-white/5 space-y-4">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Disponibilidad</span>
-                <span className="text-white font-medium">
-                  {product.stock === -1 ? "Ilimitada" : `${product.stock} unidades`}
-                </span>
-              </div>
+              <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-2">Disponibilidad y Reservas</h3>
+              {slots.length === 0 ? (
+                <div className="flex justify-between items-center text-sm p-4 bg-background/50 rounded-xl border border-white/5">
+                  <span className="text-muted-foreground">Inventario (Sin turnos asignados)</span>
+                  <span className="text-white font-medium">
+                    {product.stock === -1 ? "Ilimitada" : `${product.stock} unidades`}
+                  </span>
+                </div>
+              ) : (
+                <div className="bg-background/50 border border-white/5 rounded-2xl p-4 space-y-4">
+                  <div className="flex justify-center">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      locale={es}
+                      className="bg-transparent border-none text-white pointer-events-auto"
+                    />
+                  </div>
+                  <div className="space-y-2 pt-4 border-t border-white/5">
+                    {slotsForSelectedDate.length === 0 ? (
+                       <p className="text-sm text-center text-muted-foreground py-2">No hay horarios para este día.</p>
+                    ) : (
+                      slotsForSelectedDate.map(slot => {
+                        const available = slot.capacity - (slot.booked || 0);
+                        const isSelected = selectedSlotId === slot.id;
+                        return (
+                          <button 
+                            key={slot.id}
+                            onClick={() => setSelectedSlotId(slot.id)}
+                            className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                              isSelected 
+                                ? "border-primary bg-primary/10" 
+                                : "border-white/10 bg-black/20 hover:border-white/30"
+                            }`}
+                          >
+                            <span className="font-bold text-sm">
+                              {format(new Date(slot.startTime), "HH:mm")} - {format(new Date(slot.endTime), "HH:mm")}
+                            </span>
+                            <span className="text-xs bg-black/40 px-2 py-1 rounded text-primary">
+                              {available} cupos libres
+                            </span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

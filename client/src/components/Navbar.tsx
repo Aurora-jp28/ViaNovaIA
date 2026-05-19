@@ -2,7 +2,18 @@ import { Link, useLocation } from "wouter";
 import { useAuth, UserRole } from "@/lib/auth";
 import { LogOut, User, Settings, Package, Building2, Utensils, TentTree, Car, Clock, Languages, Globe, Compass, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
-import logoImg from "../assets/logo.jpeg";
+import { useEffect } from "react";
+// Logos sin fondo (para el Navbar)
+import logoDefault from "../assets/Logo_principal-removebg-preview.png";
+import logoOcean   from "../assets/Logo_ocean-removebg-preview.png";
+import logoForest  from "../assets/Logo_forest-removebg-preview.png";
+import logoSunset  from "../assets/Logo_sunset-Photoroom.png";
+
+// Logos con fondo (para el favicon de la pestaña)
+import iconDefault from "../assets/Logo_principal.jpeg";
+import iconOcean   from "../assets/Logo_ocean.jpeg";
+import iconForest  from "../assets/Logo_forest.jpeg";
+import iconSunset  from "../assets/Logo_sunset.jpeg";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +29,61 @@ import { useQuery } from "@tanstack/react-query";
 export default function Navbar() {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+
+  // Seleccionar logo según el tema activo
+  const themeKey = theme === 'system' ? resolvedTheme : theme;
+  
+  // Logo sin fondo (Navbar)
+  const logoSrc = (() => {
+    switch (themeKey) {
+      case 'ocean':   return logoOcean;
+      case 'forest':  return logoForest;
+      case 'sunset':  return logoSunset;
+      default:        return logoDefault; // light, dark, system
+    }
+  })();
+
+  // Logo con fondo (Favicon)
+  const iconSrc = (() => {
+    switch (themeKey) {
+      case 'ocean':   return iconOcean;
+      case 'forest':  return iconForest;
+      case 'sunset':  return iconSunset;
+      default:        return iconDefault; // light, dark, system
+    }
+  })();
+
+  // Actualizar favicon dinámicamente cuando cambie el tema (usando imagen con fondo y ampliándola)
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>("link[rel='icon']") ||
+      Object.assign(document.createElement('link'), { rel: 'icon', type: 'image/jpeg' });
+    
+    // Usamos un canvas para "hacer zoom" en la imagen y quitarle los bordes blancos
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Factor de zoom (mayor número = más grande se ve el logo)
+        const zoom = 1.9; 
+        const w = img.width;
+        const h = img.height;
+        // Calcular el área a recortar del centro
+        const cropW = w / zoom;
+        const cropH = h / zoom;
+        const cropX = (w - cropW) / 2;
+        const cropY = (h - cropH) / 2;
+        
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, 64, 64);
+        link.href = canvas.toDataURL('image/jpeg');
+        document.head.appendChild(link);
+      }
+    };
+    img.src = iconSrc;
+  }, [iconSrc]);
 
   const { data: notifications = [] } = useQuery({
     queryKey: [user?.username ? `/api/notifications?username=${encodeURIComponent(user.username)}` : null],
@@ -61,14 +126,18 @@ export default function Navbar() {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2">
           <button onClick={() => setLocation("/")} className="flex items-center gap-2 font-heading text-xl font-bold text-foreground group focus:outline-none">
-            <motion.div 
-              whileHover={{ rotate: 180 }}
-              transition={{ duration: 0.3 }}
-              className="rounded-lg overflow-hidden"
+            <motion.div
+              whileHover={{ scale: 1.1, rotate: 5 }}
+              transition={{ duration: 0.25 }}
+              className="flex items-center justify-center -ml-2"
             >
-              <img src={logoImg} alt="VIANova" className="w-8 h-8 object-cover" />
+              <img
+                src={logoSrc}
+                alt="VIANova"
+                className="w-14 h-14 object-contain drop-shadow-md scale-125"
+              />
             </motion.div>
-            <span className="text-white"><span className="text-primary">VIA</span>Nova</span>
+            <span className="text-foreground"><span className="text-primary">VIA</span>Nova</span>
           </button>
         </div>
 
@@ -111,16 +180,34 @@ export default function Navbar() {
               </button>
             )}
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            >
-              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              <span className="sr-only">Cambiar tema</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  <span className="sr-only">Cambiar tema</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-card border-border">
+                <DropdownMenuLabel>Apariencia</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setTheme('light')} className="cursor-pointer gap-2">
+                  <Sun className="h-4 w-4" /> Claro
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('dark')} className="cursor-pointer gap-2">
+                  <Moon className="h-4 w-4" /> Oscuro
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('sunset')} className="cursor-pointer gap-2">
+                  <span className="w-4 h-4 rounded-full bg-orange-400" /> Sunset
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('ocean')} className="cursor-pointer gap-2">
+                  <span className="w-4 h-4 rounded-full bg-blue-400" /> Ocean
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('forest')} className="cursor-pointer gap-2">
+                  <span className="w-4 h-4 rounded-full bg-green-400" /> Forest
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
           {user ? (
             <div className="flex items-center gap-4">

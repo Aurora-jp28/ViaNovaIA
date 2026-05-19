@@ -32,8 +32,61 @@ import Chatbot from "@/components/Chatbot";
 import ProviderDashboard from "@/pages/ProviderDashboard";
 import TaxiOrderPanel, { type SimulatedTaxi } from "@/components/TaxiOrderPanel";
 
+const HeroSection = ({ children }: { children?: React.ReactNode }) => {
+  const heroImages = [
+    "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+    "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80"
+  ];
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  useEffect(() => {
+    const int = setInterval(() => {
+      setHeroIndex(prev => (prev + 1) % heroImages.length);
+    }, 6000);
+    return () => clearInterval(int);
+  }, []);
+
+  return (
+    <section className="relative w-full h-[65vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+      {heroImages.map((src, idx) => (
+        <motion.div
+          key={idx}
+          initial={{ opacity: 0, scale: 1.1 }}
+          animate={{
+            opacity: heroIndex === idx ? 1 : 0,
+            scale: heroIndex === idx ? 1 : 1.1
+          }}
+          transition={{ duration: 2, ease: "easeInOut" }}
+          className="absolute inset-0 w-full h-full"
+        >
+          <div className="absolute inset-0 bg-black/50 z-10" />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent z-10" />
+          <img src={src} alt="Hero" className="w-full h-full object-cover" />
+        </motion.div>
+      ))}
+      <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center mt-12">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+        >
+          <h1 className="text-5xl md:text-7xl font-heading font-extrabold text-white tracking-tight mb-6">
+            Descubre el mundo con <br className="hidden md:block" /> <span className="text-primary drop-shadow-[0_0_20px_rgba(255,215,0,0.5)]">VIANova</span>
+          </h1>
+          <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto font-light">
+            Explora los destinos más exclusivos, sabores inolvidables y experiencias inmersivas impulsadas por inteligencia artificial.
+          </p>
+        </motion.div>
+        
+        {children}
+      </div>
+    </section>
+  );
+};
+
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const [_, setLocation] = useLocation();
 
   // View Mode: 'landing' (initial grid) or 'dashboard' (detail view)
@@ -55,28 +108,16 @@ export default function Home() {
   const [distanceFilter, setDistanceFilter] = useState<string>('any');
   const [priceFilter, setPriceFilter] = useState<string>('any');
   const [popularityFilter, setPopularityFilter] = useState<string>('any');
+  const [displayLimit, setDisplayLimit] = useState(40);
 
-  // Hero background image rotation
-  const heroImages = [
-    "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
-    "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80"
-  ];
-  const [heroIndex, setHeroIndex] = useState(0);
+  // Hero component is defined below to isolate re-renders
 
+  // Route protection — esperar a que loading termine antes de redirigir
   useEffect(() => {
-    const int = setInterval(() => {
-      setHeroIndex(prev => (prev + 1) % heroImages.length);
-    }, 6000);
-    return () => clearInterval(int);
-  }, []);
-
-  // Route protection
-  useEffect(() => {
-    if (!isAuthenticated) {
+    if (!loading && !isAuthenticated) {
       setLocation("/login");
     }
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, loading, setLocation]);
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -169,11 +210,17 @@ export default function Home() {
 
   const mapLocations = filteredAll;
 
+  // Esperar a que la verificación de sesión con el backend termine
+  if (loading) return null;
+
   if (!isAuthenticated) return null;
 
-  // Redirect to role selection ONLY for brand-new users (roleChangedAt explicitly null from server)
-  // Skip if user data came from old localStorage cache (missing the field entirely)
-  if (user && user.roleChangedAt === null) {
+  // Redirigir solo si el servidor confirmó explícitamente roleChangedAt=null
+  // (usuario nuevo sin rol asignado). Usuarios existentes tienen roleChangedAt undefined
+  // porque viene del localStorage cache que no tiene ese campo.
+  // Para evitar loops: solo redirigir si roleChangedAt es exactamente null
+  // y el rol es traveler (nunca ha elegido otro rol).
+  if (user && user.roleChangedAt === null && user.role === 'traveler') {
     window.location.href = "/select-role";
     return null;
   }
@@ -214,97 +261,64 @@ export default function Home() {
             className="flex flex-col w-full"
           >
             {/* HERO SECTION - PREMIUM IMMERSIVE */}
-            <section className="relative w-full h-[65vh] min-h-[500px] flex items-center justify-center overflow-hidden">
-              {/* Background Crossfade */}
-              {heroImages.map((src, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, scale: 1.1 }}
-                  animate={{
-                    opacity: heroIndex === idx ? 1 : 0,
-                    scale: heroIndex === idx ? 1 : 1.1
-                  }}
-                  transition={{ duration: 2, ease: "easeInOut" }}
-                  className="absolute inset-0 w-full h-full"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-background z-10" />
-                  <img src={src} alt="Hero" className="w-full h-full object-cover" />
-                </motion.div>
-              ))}
+            <HeroSection>
+              {/* Premium Search / Filter Bar */}
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+                className="mt-12 w-full max-w-5xl"
+              >
+                <div className="bg-card/90 backdrop-blur-md border border-border/40 rounded-2xl p-2 shadow-xl flex flex-col md:flex-row gap-2 items-center">
 
-              <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center mt-12">
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.2 }}
-                >
-
-                  <h1 className="text-5xl md:text-7xl font-heading font-extrabold text-white tracking-tight mb-6">
-                    Descubre el mundo con <br className="hidden md:block" /> <span className="text-primary drop-shadow-[0_0_20px_rgba(255,215,0,0.5)]">VIANova</span>
-                  </h1>
-                  <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto font-light">
-                    Explora los destinos más exclusivos, sabores inolvidables y experiencias inmersivas impulsadas por inteligencia artificial.
-                  </p>
-                </motion.div>
-
-                {/* Premium Search / Filter Bar */}
-                <motion.div
-                  initial={{ opacity: 0, y: 40 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="mt-12 w-full max-w-5xl"
-                >
-                  <div className="bg-card/90 backdrop-blur-md border border-border/40 rounded-2xl p-2 shadow-xl flex flex-col md:flex-row gap-2 items-center">
-
-                    <div className="flex-1 min-w-[200px] w-full bg-secondary/30 rounded-xl flex items-center px-4 h-12 hover:bg-secondary/50 transition-colors border border-transparent focus-within:border-primary/50 group">
-                      <Search className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors shrink-0" />
-                      <input
-                        type="text"
-                        placeholder="Buscar por nombre, descripción o ciudad..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-transparent border-none outline-none focus:ring-0 px-4 text-sm md:text-base text-white placeholder:text-muted-foreground"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap md:flex-nowrap w-full md:w-auto gap-2">
-                      <div className="relative flex-1 md:flex-none">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-                        <select
-                          value={distanceFilter}
-                          onChange={(e) => setDistanceFilter(e.target.value)}
-                          className="w-full h-12 pl-9 pr-4 rounded-xl border border-transparent bg-secondary/30 hover:bg-secondary/50 text-sm appearance-none outline-none focus:border-primary/50 transition-colors"
-                        >
-                          <option value="any">Distancia</option>
-                          <option value="1">Menos de 1 km</option>
-                          <option value="5">Menos de 5 km</option>
-                          <option value="10">Menos de 10 km</option>
-                        </select>
-                      </div>
-
-                      <div className="relative flex-1 md:flex-none">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-                        <select
-                          value={priceFilter}
-                          onChange={(e) => setPriceFilter(e.target.value)}
-                          className="w-full h-12 pl-9 pr-4 rounded-xl border border-transparent bg-secondary/30 hover:bg-secondary/50 text-sm appearance-none outline-none focus:border-primary/50 transition-colors"
-                        >
-                          <option value="any">Precio</option>
-                          <option value="$">Asequible ($)</option>
-                          <option value="$$">Moderado ($$)</option>
-                          <option value="$$$">Lujo ($$$)</option>
-                        </select>
-                      </div>
-
-                      <Button className="w-full md:w-auto h-12 rounded-xl bg-primary text-black font-bold px-8 hover:bg-primary/90 transition-all">
-                        Explorar
-                      </Button>
-                    </div>
-
+                  <div className="flex-1 min-w-[200px] w-full bg-secondary/30 rounded-xl flex items-center px-4 h-12 hover:bg-secondary/50 transition-colors border border-transparent focus-within:border-primary/50 group">
+                    <Search className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre, descripción o ciudad..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-transparent border-none outline-none focus:ring-0 px-4 text-sm md:text-base text-white placeholder:text-muted-foreground"
+                    />
                   </div>
-                </motion.div>
-              </div>
-            </section>
+
+                  <div className="flex flex-wrap md:flex-nowrap w-full md:w-auto gap-2">
+                    <div className="relative flex-1 md:flex-none">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                      <select
+                        value={distanceFilter}
+                        onChange={(e) => setDistanceFilter(e.target.value)}
+                        className="w-full h-12 pl-9 pr-4 rounded-xl border border-transparent bg-secondary/30 hover:bg-secondary/50 text-sm appearance-none outline-none focus:border-primary/50 transition-colors"
+                      >
+                        <option value="any">Distancia</option>
+                        <option value="1">Menos de 1 km</option>
+                        <option value="5">Menos de 5 km</option>
+                        <option value="10">Menos de 10 km</option>
+                      </select>
+                    </div>
+
+                    <div className="relative flex-1 md:flex-none">
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                      <select
+                        value={priceFilter}
+                        onChange={(e) => setPriceFilter(e.target.value)}
+                        className="w-full h-12 pl-9 pr-4 rounded-xl border border-transparent bg-secondary/30 hover:bg-secondary/50 text-sm appearance-none outline-none focus:border-primary/50 transition-colors"
+                      >
+                        <option value="any">Precio</option>
+                        <option value="$">Asequible ($)</option>
+                        <option value="$$">Moderado ($$)</option>
+                        <option value="$$$">Lujo ($$$)</option>
+                      </select>
+                    </div>
+
+                    <Button className="w-full md:w-auto h-12 rounded-xl bg-primary text-black font-bold px-8 hover:bg-primary/90 transition-all">
+                      Explorar
+                    </Button>
+                  </div>
+
+                </div>
+              </motion.div>
+            </HeroSection>
 
             {/* CATEGORIES & MAP / MAIN CONTENT */}
             <main className="container mx-auto px-4 py-16">
@@ -347,7 +361,7 @@ export default function Home() {
                       className="grid grid-cols-1 sm:grid-cols-2 gap-6"
                     >
                       <AnimatePresence>
-                        {filteredAll.slice(0, 20).map((item, index) => (
+                        {filteredAll.slice(0, displayLimit).map((item, index) => (
                           <motion.div
                             layout
                             initial={{ opacity: 0, scale: 0.9 }}
@@ -361,12 +375,21 @@ export default function Home() {
                             <CardItem item={item} onViewMap={() => handleViewOnMap(item)} />
                           </motion.div>
                         ))}
-                        {filteredAll.length > 20 && (
-                           <div className="col-span-1 sm:col-span-2 text-center pt-8 opacity-60 text-sm">
-                             Mostrando 20 resultados de {filteredAll.length}. Usa los filtros para refinar tu búsqueda.
-                           </div>
-                        )}
                       </AnimatePresence>
+                      {filteredAll.length > displayLimit && (
+                        <div className="col-span-1 sm:col-span-2 text-center pt-8 flex flex-col items-center">
+                          <p className="opacity-60 text-sm mb-4">
+                            Mostrando {displayLimit} de {filteredAll.length} resultados. Usa los filtros para refinar tu búsqueda.
+                          </p>
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setDisplayLimit(prev => prev + 40)}
+                            className="rounded-full border-primary/50 text-primary hover:bg-primary/10"
+                          >
+                            Ver más resultados
+                          </Button>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </div>
@@ -398,7 +421,8 @@ export default function Home() {
           >
             {/* Hero specific to the item */}
             <div className="relative w-full h-[40vh] min-h-[300px]">
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent z-10" />
+              <div className="absolute inset-0 bg-black/30 z-10" />
+              <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background to-transparent z-10" />
               <img src={selectedItem?.image} alt={selectedItem?.name} className="w-full h-full object-cover" />
 
               <div className="absolute top-6 left-6 z-20">

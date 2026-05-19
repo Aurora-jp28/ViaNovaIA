@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/auth';
 import { motion, AnimatePresence } from 'framer-motion';
-import logoImg from '../assets/logo.jpeg';
+import botLogo from '../assets/bot-logo.png';
 
 interface Message {
   id: string;
@@ -325,10 +325,10 @@ export default function Chatbot() {
           >
             <Button
               onClick={() => setIsOpen(true)}
-              className="h-16 w-16 rounded-full bg-gradient-to-tr from-primary to-yellow-300 text-black border-2 border-primary/20"
+              className="h-16 w-16 rounded-full bg-gradient-to-tr from-primary to-yellow-300 text-black border-2 border-primary/20 p-0 overflow-hidden"
             >
               <Sparkles className="h-8 w-8 absolute opacity-50 blur-[2px] animate-pulse" />
-              <Bot className="h-8 w-8 relative z-10" />
+              <img src={botLogo} alt="ViaNova Bot" className="h-12 w-12 object-contain relative z-10 drop-shadow-md" />
             </Button>
           </motion.div>
         )}
@@ -350,8 +350,8 @@ export default function Chatbot() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] -mr-10 -mt-10 rounded-full" />
                 <div className="flex items-center gap-3 relative z-10">
                   <div className="relative">
-                    <Avatar className="h-12 w-12 border-2 border-primary/50 shadow-lg ring-2 ring-background">
-                      <AvatarImage src={logoImg} alt="VIANova Bot" />
+                    <Avatar className="h-12 w-12 border-2 border-primary/50 shadow-lg ring-2 ring-background bg-card p-1">
+                      <AvatarImage src={botLogo} alt="VIANova Bot" className="object-contain" />
                       <AvatarFallback className="bg-gradient-to-br from-primary to-yellow-600 text-black">
                         <Bot className="h-6 w-6" />
                       </AvatarFallback>
@@ -388,8 +388,8 @@ export default function Chatbot() {
                           className={`flex gap-3 items-end ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                         >
                           {msg.role === 'assistant' && (
-                            <Avatar className="h-8 w-8 shrink-0 shadow-md">
-                              <AvatarImage src={logoImg} />
+                            <Avatar className="h-8 w-8 shrink-0 shadow-md bg-card p-0.5">
+                              <AvatarImage src={botLogo} className="object-contain" />
                               <AvatarFallback className="bg-primary/20 text-primary border border-primary/30"><Bot className="h-4 w-4" /></AvatarFallback>
                             </Avatar>
                           )}

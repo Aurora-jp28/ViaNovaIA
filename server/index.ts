@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes/index.js";
 import { serveStatic } from "./static.js";
 import { createServer } from "http";
@@ -20,7 +21,15 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(cors());
+// Configurar CORS estricto
+app.use(cors({
+  origin: process.env.NODE_ENV === "production" 
+    ? [process.env.CLIENT_URL || "", "http://localhost", "capacitor://localhost"] 
+    : true,
+  credentials: true
+}));
+
+app.use(cookieParser(process.env.SESSION_SECRET || "via_nova_secret_key_2026"));
 
 declare module "http" {
   interface IncomingMessage {

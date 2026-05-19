@@ -3,17 +3,39 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, getDb } from "../storage.js";
 import { registerTaxiRoutes } from "./taxi.routes.js";
+import { bookingsRouter } from "./bookings.routes.js";
+import { socialRouter } from "./social.routes.js";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { z } from "zod";
-import { insertServiceSchema, insertCommentSchema, comments } from "../../shared/schema.js";
+import { insertServiceSchema, insertCommentSchema, comments, users } from "../../shared/schema.js";
 import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail, sendCustomEmail } from "../mailer.js";
 import rateLimit from "express-rate-limit";
-import * as badWords from "bad-words";
-const Filter = badWords.default || badWords;
+// Filtro básico de groserías (reemplaza 'bad-words' por problemas de ESM)
+class Filter {
+  private words: string[] = [];
+  addWords(...words: string[]) {
+    this.words.push(...words.map(w => w.toLowerCase()));
+  }
+  isProfane(text: string) {
+    if (!text) return false;
+    const lowerText = text.toLowerCase();
+    return this.words.some(word => lowerText.includes(word));
+  }
+  clean(text: string) {
+    if (!text) return text;
+    let result = text;
+    this.words.forEach(word => {
+      const regex = new RegExp(word, 'gi');
+      result = result.replace(regex, '*'.repeat(word.length));
+    });
+    return result;
+  }
+}
 
 // Instanciar filtro de groserías y añadir palabras en español
 const profanityFilter = new Filter();
@@ -69,7 +91,41 @@ function configureCloudinary() {
 // Helper: strip sensitive fields from user object before sending to client
 function sanitizeUser(user: any) {
   const { password, ...safe } = user;
+  // Convertir roleChangedAt null a undefined para no disparar redirect de nuevo rol
+  // Solo debe ser null cuando el backend específicamente quiere indicar "usuario nuevo sin rol"
+  // Para usuarios existentes (creados antes del sistema de roles) usamos undefined
+  if (safe.roleChangedAt === null && safe.role && safe.role !== 'traveler') {
+    safe.roleChangedAt = undefined;
+  }
   return safe;
+}
+
+// Configuración de JWT
+const JWT_SECRET = process.env.JWT_SECRET || "via_nova_jwt_secret_key_2026";
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+};
+
+function generateToken(user: any) {
+  return jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+}
+
+// Middleware de Autenticación
+export function requireAuth(req: any, res: any, next: any) {
+  const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "No autenticado" });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ message: "Sesión inválida o expirada" });
+  }
 }
 
 // Helper: detect the public-facing base URL of the app.
@@ -88,6 +144,9 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   configureCloudinary();
+  
+  app.use("/api/bookings", bookingsRouter);
+  app.use("/api/social", socialRouter);
 
   // Health
   app.get("/api/health", (_req, res) => {
@@ -136,6 +195,8 @@ export async function registerRoutes(
         html: `<p>Hola ${name || username},</p><p>Tu código de verificación es: <strong>${verificationToken}</strong></p>`
       }).catch(console.error);
 
+      const token = generateToken(user);
+      res.cookie("token", token, COOKIE_OPTIONS);
       res.json({ user: sanitizeUser(user) });
     } catch (err) {
       next(err);
@@ -186,16 +247,33 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Usuario no encontrado" });
       }
 
-      // Verify password with bcrypt
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) {
         return res.status(401).json({ message: "Contraseña incorrecta" });
       }
 
+      const token = generateToken(user);
+      res.cookie("token", token, COOKIE_OPTIONS);
       res.json({ user: sanitizeUser(user) });
     } catch (err) {
       next(err);
     }
+  });
+
+  // ─── AUTH: Me & Logout ──────────────────────────────────────────────────────
+  app.get("/api/auth/me", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUserByUsername(req.user.username);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+      res.json({ user: sanitizeUser(user) });
+    } catch (err) {
+      res.status(500).json({ message: "Error interno" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    res.clearCookie("token", COOKIE_OPTIONS);
+    res.json({ message: "Sesión cerrada" });
   });
 
   // ─── AUTH: Google Mobile (ID Token verification) ────────────────────────────
@@ -435,11 +513,12 @@ export async function registerRoutes(
       const profile: any = await profileRes.json();
 
       const email = profile.email as string;
-      let user = await storage.getUserByUsername(email);
+      let user = await storage.getUserByEmail(email);
       if (!user) {
         const hashed = await hashPassword("google_oauth_" + crypto.randomUUID());
+        const username = "user_" + crypto.randomBytes(4).toString("hex");
         user = await storage.createUser({
-          username: email,
+          username: username,
           password: hashed,
           name: profile.name,
           email: email,
@@ -454,9 +533,9 @@ export async function registerRoutes(
 
       const clientUrl = getBaseUrl(req);
       const payload = encodeURIComponent(JSON.stringify({
-        username: email,
-        name: profile.name,
-        email: email,
+        username: user.username,
+        name: user.name,
+        email: user.email,
         role: user.role || "traveler",
         roleChangedAt: user.roleChangedAt || null,
       }));
@@ -773,41 +852,113 @@ export async function registerRoutes(
       // Save message to DB for persistence (long-term log)
       await storage.addMessage(conversation.id, "user", message, { location });
 
-      // ── Detectar ciudad destino en el historial para inyectar servicios reales ──
-      const COLOMBIAN_CITIES = ["cali","neiva","medellín","medellin","cartagena","santa marta","bogotá","bogota","bucaramanga","barranquilla","manizales","pereira","armenia","ibagué","ibague","villavicencio","pasto","montería","monteria"];
+      // ── RAG: Detectar ciudad, intención y construir contexto de BD real ──────
+      const COLOMBIAN_CITIES = ["cali","neiva","medellín","medellin","cartagena","santa marta","bogotá","bogota","bucaramanga","barranquilla","manizales","pereira","armenia","ibagué","ibague","villavicencio","pasto","montería","monteria","leticia","tunja","popayán","popayan","florencia","riohacha","sincelejo","valledupar","quibdó","quibdo"];
       const allText = [message, ...((Array.isArray(history) ? history : []).map((m: any) => m.content || ""))].join(" ").toLowerCase();
-      // Opción B (explícita) tiene prioridad sobre Opción A (inferida)
-      const detectedCity = destinationCity 
-        ? destinationCity.toLowerCase() 
+
+      // Opción explícita tiene prioridad
+      const detectedCity = destinationCity
+        ? destinationCity.toLowerCase()
         : (COLOMBIAN_CITIES.find(c => allText.includes(c)) ?? "");
+
+      // Detectar intención de búsqueda (keywords sin ciudad)
+      const SEARCH_KEYWORDS = ["hotel","restaurante","hospedaje","comer","dormir","actividad","taxi","transporte","tour","recreación","recreacion","piscina","habitación","mesa","reservar"];
+      const hasSearchIntent = SEARCH_KEYWORDS.some(kw => allText.includes(kw));
+
       let servicesContext = "";
-      if (detectedCity) {
-        try {
-          const cityServices = await storage.listServicesByCity(detectedCity);
-          if (cityServices.length > 0) {
-            const fmt = (category: string, emoji: string) =>
-              cityServices
-                .filter((s: any) => s.category === category)
-                .map((s: any) => `  ${emoji} **${s.name}** (@${s.provider_username ?? s.providerUsername}) — $${Number(s.price ?? 0).toLocaleString("es-CO")} COP ⭐${s.rating ?? "?"} — ${s.description?.substring(0, 80) ?? ""}`)
-                .join("\n");
-            servicesContext = `\n\n**SERVICIOS REALES DISPONIBLES EN ${detectedCity.toUpperCase()} (usa SOLO estos):**\n` +
-              fmt("hotel", "🏨") + "\n" + fmt("restaurant", "🍽") + "\n" + fmt("recreation", "🎭") + "\n" + fmt("transport", "🚕");
-          }
-        } catch (e) { /* non-blocking */ }
+
+      try {
+        const db = getDb();
+
+        // ─── 1. Servicios reales de la tabla services (perfil proveedor) ─────
+        let cityServices: any[] = [];
+        if (detectedCity) {
+          cityServices = await storage.listServicesByCity(detectedCity);
+        } else if (hasSearchIntent) {
+          // Si busca algo pero no dijo ciudad, traemos los mejores 15 globales
+          const rows = await db.execute(drizzleSql`
+            SELECT * FROM services ORDER BY rating DESC NULLS LAST LIMIT 15
+          `);
+          cityServices = (rows as any).rows ?? (rows as any) ?? [];
+        }
+
+        // ─── 2. Productos del Marketplace (tabla products) ────────────────────
+        let marketProducts: any[] = [];
+        if (detectedCity) {
+          const rows = await db.execute(drizzleSql`
+            SELECT p.*, u.name as provider_name
+            FROM products p
+            JOIN users u ON u.id = p.provider_id
+            WHERE p.is_active = true
+            LIMIT 20
+          `);
+          marketProducts = (rows as any).rows ?? (rows as any) ?? [];
+        } else if (hasSearchIntent) {
+          const rows = await db.execute(drizzleSql`
+            SELECT p.*, u.name as provider_name
+            FROM products p
+            JOIN users u ON u.id = p.provider_id
+            WHERE p.is_active = true
+            ORDER BY p.created_at DESC
+            LIMIT 12
+          `);
+          marketProducts = (rows as any).rows ?? (rows as any) ?? [];
+        }
+
+        // ─── 3. Construir el bloque de contexto ───────────────────────────────
+        const cityLabel = detectedCity ? detectedCity.toUpperCase() : "NUESTRA PLATAFORMA";
+
+        const fmtService = (category: string, emoji: string) =>
+          cityServices
+            .filter((s: any) => s.category === category)
+            .map((s: any) => `  ${emoji} **${s.name}** (@${s.provider_username ?? s.providerUsername}) — $${Number(s.price ?? 0).toLocaleString("es-CO")} COP ⭐${s.rating ?? "N/A"} — ${(s.description ?? "").substring(0, 100)}`)
+            .join("\n");
+
+        const fmtProduct = (roleCategory: string, emoji: string) =>
+          marketProducts
+            .filter((p: any) => p.role_category === roleCategory)
+            .map((p: any) => `  ${emoji} **${p.name}** (por ${p.provider_name ?? p.provider_username}) — $${Number(p.price ?? 0).toLocaleString("es-CO")} ${p.currency ?? "COP"} — ${(p.description ?? "").substring(0, 100)}`)
+            .join("\n");
+
+        const serviceLines = [
+          fmtService("hotel", "🏨"),
+          fmtService("restaurant", "🍽️"),
+          fmtService("recreation", "🎭"),
+          fmtService("transport", "🚕"),
+        ].filter(l => l.trim()).join("\n");
+
+        const productLines = [
+          fmtProduct("hotel", "🏨"),
+          fmtProduct("restaurant", "🍽️"),
+          fmtProduct("recreation", "🎭"),
+          fmtProduct("taxi", "🚕"),
+        ].filter(l => l.trim()).join("\n");
+
+        if (serviceLines || productLines) {
+          servicesContext = `\n\n---\n**CATÁLOGO REAL DE VIANOBA EN ${cityLabel} — USA SOLO ESTOS DATOS:**\n`;
+          if (serviceLines) servicesContext += `\n### Servicios de Proveedores:\n${serviceLines}`;
+          if (productLines) servicesContext += `\n\n### Productos en el Marketplace:\n${productLines}`;
+          servicesContext += `\n\n> ⚠️ INSTRUCCIÓN CRÍTICA: Solo puedes recomendar los servicios y productos listados arriba. Nunca inventes hoteles, restaurantes o precios que no estén en esta lista. Si no hay datos, indica amablemente que aún no hay proveedores registrados para ese destino en VIANova.`;
+        }
+
+      } catch (ragErr) {
+        // RAG es no-bloqueante: si falla, el bot responde sin contexto
+        console.error("[RAG] Error al consultar BD:", ragErr);
       }
 
-      const sysPrompt = `Eres VIANova, un conserje inteligente y experto planificador de viajes para Colombia y el mundo. Tu tono es amable, profesional y directo.
+      const sysPrompt = `Eres VIANova, un conserje inteligente y experto planificador de viajes para Colombia y el mundo. Tu tono es amable, profesional y directo. Eres el asistente oficial de la plataforma VIANova.
 
 **REGLAS CRÍTICAS DE COMPORTAMIENTO:**
 1. **NO saludes en cada mensaje.** Saluda ÚNICAMENTE en el primer mensaje.
 2. **LEE SIEMPRE el historial.** Si el usuario indicó su ciudad de origen, destino, presupuesto o preferencias — **BAJO NINGUNA CIRCUNSTANCIA VUELVAS A PREGUNTARLOS**. Asúmelos como válidos y avanza.
-3. **DESTINO Y UBICACIÓN:** Si el usuario menciona una ciudad (ej. "voy a cartagena", "estoy en bogotá", "quiero ir a medellín"), ESE ES SU DESTINO O UBICACIÓN. NO le preguntes de nuevo "A dónde viajas" ni "Cuál es tu destino". Pasa directo a recomendar servicios.
+3. **DESTINO Y UBICACIÓN:** Si el usuario menciona una ciudad (ej. "voy a cartagena", "estoy en bogotá"), ESE ES SU DESTINO. NO lo preguntes de nuevo. Pasa directo a recomendar servicios.
 4. **Responde de forma concisa.** Máximo 3-4 párrafos.
-5. **Usa los servicios reales de VIANova** cuando estén disponibles abajo. Menciona sus nombres, precios y usuario (@) exactamente como aparecen.
+5. **USA SOLO los servicios y productos del catálogo real** listado al final de este prompt. NUNCA inventes establecimientos, precios o nombres.
+6. **Si no hay datos** en el catálogo para ese destino, dilo honestamente: "Aún no tenemos proveedores registrados en VIANova para [ciudad], pero puedo ayudarte con recomendaciones generales."
 
 **PROCESO DE PLANIFICACIÓN DE VIAJES:**
 1. **Recolección:** Identifica presupuesto, destino, duración. Si el usuario ya mencionó el destino, NUNCA lo vuelvas a preguntar.
-2. **Propuesta:** Diseña un plan usando los servicios reales de VIANova.
+2. **Propuesta:** Diseña un plan usando los servicios reales de VIANova del catálogo.
 3. **Confirmación:** Pregunta si el usuario aprueba el plan.
 4. **Cronograma:** Si el usuario ACEPTA, genera las solicitudes en este formato exacto:
 
@@ -1228,8 +1379,8 @@ export async function registerRoutes(
       if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
       const db = getDb();
-      const updated = await db.execute(drizzleSql`UPDATE users SET name = ${name} WHERE id = ${user.id} RETURNING *`);
-      res.json({ user: sanitizeUser(((updated as any).rows ?? (updated as any))[0]) });
+      const updatedRows = await db.update(users).set({ name }).where(eq(users.id, user.id)).returning();
+      res.json({ user: sanitizeUser(updatedRows[0]) });
     } catch (err) {
       next(err);
     }
