@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import botLogo from '../assets/bot-logo.png';
+import { AIIcon } from './AIIcon';
 
 declare global {
   interface Window {
@@ -630,17 +631,15 @@ export default function Chatbot() {
             exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 rounded-full shadow-[0_0_30px_rgba(255,215,0,0.3)] hover:shadow-[0_0_40px_rgba(255,215,0,0.6)] transition-shadow"
+            className="fixed bottom-6 right-6 z-50 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/60 transition-shadow"
           >
             <Button
               onClick={() => setIsOpen(true)}
               className="h-16 w-16 rounded-full bg-primary text-primary-foreground border-2 border-primary/20 p-0 overflow-hidden"
             >
-              <div className="w-full h-full bg-gradient-to-br from-primary via-amber-400 to-orange-500 rounded-full flex items-center justify-center p-[2px]">
+              <div className="w-full h-full bg-gradient-to-br from-primary via-primary/80 to-primary/50 rounded-full flex items-center justify-center p-[2px]">
                 <div className="w-full h-full bg-black/80 rounded-full flex items-center justify-center relative">
-                  <Sparkles className="h-6 w-6 text-primary absolute top-2 right-2 animate-pulse" />
-                  <Sparkles className="h-4 w-4 text-primary absolute bottom-2 left-2 animate-bounce" />
-                  <Bot className="h-8 w-8 text-primary relative z-10" />
+                  <AIIcon className="h-10 w-10 text-primary relative z-10" />
                 </div>
               </div>
             </Button>
@@ -664,9 +663,9 @@ export default function Chatbot() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] -mr-10 -mt-10 rounded-full" />
                 <div className="flex items-center gap-3 relative z-10">
                   <div className="relative">
-                    <Avatar className="h-12 w-12 border-0 shadow-[0_0_15px_rgba(251,191,36,0.6)] ring-2 ring-primary/40 bg-gradient-to-br from-primary via-amber-400 to-orange-500 p-[2px]">
+                    <Avatar className="h-12 w-12 border-0 shadow-lg shadow-primary/50 ring-2 ring-primary/40 bg-gradient-to-br from-primary via-primary/80 to-primary/50 p-[2px]">
                       <div className="w-full h-full bg-black/80 rounded-full flex items-center justify-center">
-                        <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+                        <AIIcon className="h-8 w-8 text-primary" />
                       </div>
                     </Avatar>
                     <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-background animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]" />
@@ -790,9 +789,9 @@ export default function Chatbot() {
                                 className={`flex gap-3 items-end ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                               >
                                 {msg.role === 'assistant' && (
-                                  <Avatar className="h-8 w-8 shrink-0 shadow-[0_0_10px_rgba(251,191,36,0.4)] bg-gradient-to-br from-primary via-amber-400 to-orange-500 p-[2px]">
+                                  <Avatar className="h-8 w-8 shrink-0 shadow-md shadow-primary/40 bg-gradient-to-br from-primary via-primary/80 to-primary/50 p-[2px]">
                                     <div className="w-full h-full bg-black/80 rounded-full flex items-center justify-center">
-                                      <Sparkles className="h-4 w-4 text-primary" />
+                                      <AIIcon className="h-5 w-5 text-primary" />
                                     </div>
                                   </Avatar>
                                 )}
