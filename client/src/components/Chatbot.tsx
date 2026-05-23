@@ -676,11 +676,9 @@ export default function Chatbot() {
                       {/* Data Cards Overlay (if assistant sent booking cards recently) */}
                       <div className="absolute top-4 left-4 right-4 z-20 max-h-[40vh] overflow-y-auto hidden-scrollbar flex justify-center">
                         <div className="w-full max-w-lg space-y-4">
-                          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
+                          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && messages[messages.length - 1].content.includes('📋 Solicitudes de Reserva') && (
                             <div className="animate-in fade-in slide-in-from-top-4 duration-500">
-                              {parseMessageText(messages[messages.length - 1].content).map((segment, idx) => (
-                                segment.type === 'cards' && <BookingCards key={idx} text={segment.content} />
-                              ))}
+                              <BookingCards content={messages[messages.length - 1].content} msgIdx={messages.length - 1} totalMsgs={messages.length} />
                             </div>
                           )}
                         </div>
