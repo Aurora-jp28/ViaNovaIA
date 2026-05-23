@@ -60,9 +60,7 @@ export default function TaxiDashboard() {
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-              <Car className="h-5 w-5 text-primary" />
-            </div>
+            <Car className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-xl font-bold font-heading leading-tight">Panel del Taxista</h1>
               <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -278,9 +276,7 @@ export default function TaxiDashboard() {
                 {rideHistory.slice(0, 5).map((r: any) => (
                   <div key={r.id} className="flex items-center justify-between px-4 py-3 hover:bg-secondary/20 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-green-500/10 rounded-lg">
-                        <Car className="h-3.5 w-3.5 text-green-400" />
-                      </div>
+                      <Car className="h-3.5 w-3.5 text-green-400" />
                       <div>
                         <p className="text-sm font-medium">{r.destinationAddress}</p>
                         <p className="text-xs text-muted-foreground">

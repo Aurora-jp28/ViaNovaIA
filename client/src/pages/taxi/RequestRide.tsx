@@ -355,9 +355,7 @@ export default function RequestRide() {
 
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl font-bold font-heading flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-              <Car className="h-5 w-5 text-primary" />
-            </div>
+            <Car className="h-8 w-8 text-primary" />
             {isTracking ? "Tu Viaje" : "Pedir un Taxi"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">

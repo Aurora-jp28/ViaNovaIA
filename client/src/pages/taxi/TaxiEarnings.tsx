@@ -219,7 +219,7 @@ export default function TaxiEarnings() {
                 <motion.div key={e.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.04 }}
                   className="flex items-center justify-between px-4 py-3 hover:bg-secondary/20 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-xl"><Car className="h-3.5 w-3.5 text-primary" /></div>
+                    <Car className="h-5 w-5 text-primary" />
                     <div>
                       <p className="text-sm font-medium">Viaje completado</p>
                       <p className="text-xs text-muted-foreground">
@@ -251,7 +251,7 @@ export default function TaxiEarnings() {
                   <motion.div key={w.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.05 }}
                     className="flex items-center justify-between px-4 py-3 hover:bg-secondary/20 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-secondary/50 rounded-xl"><ArrowDownCircle className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                      <ArrowDownCircle className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <p className="text-sm font-medium">{w.bankAccount || "Cuenta bancaria"}</p>
                         <p className="text-xs text-muted-foreground">

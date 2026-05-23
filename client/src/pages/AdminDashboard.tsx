@@ -34,7 +34,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
             <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl"><Users className="h-6 w-6" /></div>
+                <Users className="text-blue-500 h-8 w-8" />
                 <div>
                   <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Usuarios</p>
                   <p className="text-2xl font-bold">{stats?.totalUsers || 0}</p>
@@ -43,7 +43,7 @@ export default function AdminDashboard() {
             </div>
             <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-purple-500/10 text-purple-500 rounded-xl"><Activity className="h-6 w-6" /></div>
+                <Activity className="text-purple-500 h-8 w-8" />
                 <div>
                   <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Proveedores</p>
                   <p className="text-2xl font-bold">{stats?.totalProviders || 0}</p>
@@ -52,7 +52,7 @@ export default function AdminDashboard() {
             </div>
             <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-green-500/10 text-green-500 rounded-xl"><ShieldAlert className="h-6 w-6" /></div>
+                <ShieldAlert className="text-green-500 h-8 w-8" />
                 <div>
                   <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Verificados</p>
                   <p className="text-2xl font-bold">{stats?.verifiedUsers || 0}</p>
@@ -61,7 +61,7 @@ export default function AdminDashboard() {
             </div>
             <div className="bg-card border border-red-500/30 rounded-2xl p-6 shadow-sm bg-red-500/5">
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-red-500/20 text-red-500 rounded-xl"><AlertTriangle className="h-6 w-6" /></div>
+                <AlertTriangle className="text-red-500 h-8 w-8" />
                 <div>
                   <p className="text-sm font-medium text-red-400 uppercase tracking-wider">Cuentas Bloqueadas</p>
                   <p className="text-2xl font-bold text-red-400">{stats?.lockedAccounts || 0}</p>

@@ -302,9 +302,7 @@ export default function RideHistory() {
                       className="w-full text-left p-4 flex items-center gap-4"
                     >
                       {/* Status icon */}
-                      <div className={`p-2.5 rounded-xl ${item.status === "completed" ? "bg-green-500/10" : item.status === "cancelled" ? "bg-red-500/10" : "bg-primary/10"}`}>
-                        {isService ? <Star className={`h-4 w-4 ${st.color.split(' ')[1]}`} /> : st.icon}
-                      </div>
+                      {isService ? <Star className={`h-6 w-6 ${st.color.split(' ')[1]}`} /> : st.icon}
 
                       {/* item info */}
                       <div className="flex-1 min-w-0">
@@ -415,9 +413,7 @@ export default function RideHistory() {
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reseñas</p>
                                 {reviews.map((rev: any) => (
                                   <div key={rev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-secondary/20 border border-border/30">
-                                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                      <Star className="h-3.5 w-3.5 text-primary" />
-                                    </div>
+                                    <Star className="h-5 w-5 text-primary shrink-0" />
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs font-medium">{rev.authorUsername}</span>
