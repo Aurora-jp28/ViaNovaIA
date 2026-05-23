@@ -51,6 +51,7 @@ export default function Chatbot() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptRef = useRef('');
   const isHandlingVoiceRef = useRef(false);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -67,36 +68,52 @@ export default function Chatbot() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;
+        recognition.continuous = true; // Listen continuously like Gemini
         recognition.interimResults = true;
         recognition.lang = 'es-ES';
         
         recognition.onresult = (event: any) => {
           let interimTranscript = '';
           let finalTranscript = '';
+          let isFinal = false;
 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
               finalTranscript += event.results[i][0].transcript;
+              isFinal = true;
             } else {
               interimTranscript += event.results[i][0].transcript;
             }
           }
           
-          const currentText = finalTranscript || interimTranscript;
+          const currentText = (transcriptRef.current + " " + finalTranscript).trim() + (interimTranscript ? " " + interimTranscript : "");
           setVoiceTranscript(currentText);
-          transcriptRef.current = currentText;
+          
+          if (isFinal) {
+            transcriptRef.current = (transcriptRef.current + " " + finalTranscript).trim();
+            // Auto-send after 2 seconds of silence (Gemini style)
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = setTimeout(() => {
+              if (transcriptRef.current.trim() && !isHandlingVoiceRef.current) {
+                handleVoiceSend(transcriptRef.current.trim());
+              }
+            }, 2000);
+          }
         };
 
         recognition.onerror = (event: any) => {
-          console.error('Speech recognition error', event.error);
-          setIsListening(false);
+          if (event.error !== 'no-speech') {
+            console.error('Speech recognition error', event.error);
+            setIsListening(false);
+          }
         };
 
         recognition.onend = () => {
-          setIsListening(false);
-          if (transcriptRef.current.trim() && !isHandlingVoiceRef.current) {
-            handleVoiceSend(transcriptRef.current.trim());
+          // Restart automatically if still in voice mode and not speaking (continuous mode drops sometimes)
+          if (!isHandlingVoiceRef.current && isVoiceMode) {
+             try { recognition.start(); } catch(e) {}
+          } else {
+             setIsListening(false);
           }
         };
 
@@ -107,6 +124,7 @@ export default function Chatbot() {
     }
     
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -122,14 +140,14 @@ export default function Chatbot() {
   }, []);
 
   const playTTS = async (text: string) => {
-    // Clean text from markdown and structural components for natural reading
+    // Clean text: remove asterisks completely, remove code blocks, and markdown structure
     const cleanText = text
+      .replace(/\*/g, '') // Remove all asterisks
       .replace(/###.*/g, '')
       .replace(/\[.*?\]/g, '')
-      .replace(/\*.*?\*/g, '')
       .replace(/```[\s\S]*?```/g, '')
       .replace(/📋 Solicitudes de Reserva[\s\S]*/g, '')
-      .replace(/[#*_~`>|]/g, '')
+      .replace(/[#_~`>|]/g, '')
       .trim();
       
     if (!cleanText) return;
@@ -161,14 +179,23 @@ export default function Chatbot() {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
         audioRef.current = null;
+        // Resume listening after speaking (Gemini style)
+        if (isVoiceMode) {
+          try { recognitionRef.current?.start(); setIsListening(true); } catch(e) {}
+        }
       };
 
       audio.onerror = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
         audioRef.current = null;
+        if (isVoiceMode) {
+          try { recognitionRef.current?.start(); setIsListening(true); } catch(e) {}
+        }
       };
 
+      // Pause mic while speaking so it doesn't hear itself
+      try { recognitionRef.current?.stop(); setIsListening(false); } catch(e) {}
       await audio.play();
     } catch (err) {
       console.error('Edge TTS error, falling back to Web Speech:', err);
@@ -180,8 +207,16 @@ export default function Chatbot() {
         utterance.lang = 'es-CO';
         utterance.rate = 1.05;
         utterance.pitch = 1.1;
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+          try { recognitionRef.current?.stop(); setIsListening(false); } catch(e) {}
+        };
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          if (isVoiceMode) {
+            try { recognitionRef.current?.start(); setIsListening(true); } catch(e) {}
+          }
+        };
         synth.cancel();
         synth.speak(utterance);
       } catch (e) {
@@ -213,6 +248,7 @@ export default function Chatbot() {
     if (recognitionRef.current && !isListening) {
       setVoiceTranscript('');
       transcriptRef.current = '';
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
       try { window.speechSynthesis?.cancel(); } catch(e) {}
       setIsSpeaking(false);
@@ -529,7 +565,7 @@ export default function Chatbot() {
               <Icon className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block mb-0.5">{item.type}</span>
-                <span>{item.details}</span>
+                <span>{item.details.replace(/\*/g, '')}</span>
                 {item.providerUsername && <span className="block mt-0.5 opacity-60">@{item.providerUsername}</span>}
               </div>
             </motion.div>
@@ -637,9 +673,21 @@ export default function Chatbot() {
                       className="absolute inset-0 z-20 bg-background/95 backdrop-blur-3xl flex flex-col items-center justify-center p-6 text-center border-t border-white/5"
                     >
                       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none" />
-                      
+                      {/* Data Cards Overlay (if assistant sent booking cards recently) */}
+                      <div className="absolute top-4 left-4 right-4 z-20 max-h-[40vh] overflow-y-auto hidden-scrollbar flex justify-center">
+                        <div className="w-full max-w-lg space-y-4">
+                          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
+                            <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                              {parseMessageText(messages[messages.length - 1].content).map((segment, idx) => (
+                                segment.type === 'cards' && <BookingCards key={idx} text={segment.content} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Grok-style waves visualizer */}
-                      <div className="flex items-center justify-center h-32 gap-1.5 mb-8 relative z-10 w-full">
+                      <div className="flex items-center justify-center h-32 gap-1.5 mb-8 relative z-10 w-full mt-12">
                         {[...Array(12)].map((_, i) => (
                           <motion.div
                             key={i}
@@ -677,7 +725,7 @@ export default function Chatbot() {
                         </p>
                       </div>
 
-                      <div className="mt-12 relative z-10">
+                      <div className="mt-8 relative z-10">
                         <Button
                           onClick={isListening ? () => recognitionRef.current?.stop() : startListening}
                           className={`h-20 w-20 rounded-full shadow-2xl transition-all duration-300 ${isListening ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30' : 'bg-primary text-black hover:bg-primary/80 hover:scale-105'}`}
