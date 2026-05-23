@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import TranslatedText from "./TranslatedText";
 import { apiBase } from "@/lib/queryClient";
 import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Image as ImageIcon, Loader2, Bot, Sparkles, MapPin, Hotel, UtensilsCrossed, Car, Ticket, CheckCircle2, Mic, MicOff, AudioLines } from 'lucide-react';
@@ -25,7 +26,7 @@ interface Message {
 }
 
 export default function Chatbot() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', role: 'assistant', content: t('chatbot.start') }
@@ -72,7 +73,8 @@ export default function Chatbot() {
         const recognition = new SpeechRecognition();
         recognition.continuous = true; // Listen continuously like Gemini
         recognition.interimResults = true;
-        recognition.lang = 'es-ES';
+        const langMap: Record<string, string> = { es: 'es-ES', en: 'en-US', fr: 'fr-FR', pt: 'pt-BR', zh: 'zh-CN' };
+        recognition.lang = langMap[i18n.language] || 'es-ES';
         
         recognition.onresult = (event: any) => {
           let interimTranscript = '';
@@ -734,7 +736,7 @@ export default function Chatbot() {
 
                       <div className="relative z-10 max-w-full">
                         <p className={`text-lg font-medium transition-colors ${isListening ? 'text-foreground' : 'text-primary'}`}>
-                          {isListening ? 'Escuchando...' : isSpeaking ? 'VIANova está hablando...' : 'Toca el micrófono para hablar'}
+                          {isListening ? t('chatbot.listening', 'Escuchando...') : isSpeaking ? t('chatbot.speaking', 'VIANova está hablando...') : t('chatbot.tap_mic', 'Toca el micrófono para hablar')}
                         </p>
                         <p className="mt-4 text-sm text-muted-foreground min-h-[3rem] line-clamp-4 px-4 italic">
                           {voiceTranscript ? `"${voiceTranscript}"` : ""}
@@ -785,10 +787,10 @@ export default function Chatbot() {
                                   <div className="whitespace-pre-wrap tracking-wide">
                                     {msg.content.includes('### SOLICITUDES DE RESERVA:')
                                       ? <>
-                                          <span>{msg.content.split('### SOLICITUDES DE RESERVA:')[0]}</span>
+                                          <span><TranslatedText text={msg.content.split('### SOLICITUDES DE RESERVA:')[0]} /></span>
                                           <BookingCards content={msg.content} msgIdx={idx} totalMsgs={messages.length} />
                                         </>
-                                      : <span>{msg.content}</span>
+                                      : <span><TranslatedText text={msg.content} /></span>
                                     }
                                   </div>
                                   {msg.image && (
@@ -801,7 +803,7 @@ export default function Chatbot() {
                                   {msg.role === 'assistant' && msg.content.toLowerCase().includes('ubicación') && !sharedLocation && idx === messages.length - 1 && (
                                     <div className="mt-4 p-3 bg-background/50 rounded-xl border border-primary/20 shadow-sm">
                                       <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-                                        <strong className="text-primary font-bold">💡 Nota:</strong> El GPS automático en computadoras puede ser impreciso o mostrar "Bogotá" debido a tu proveedor de internet.
+                                        <strong className="text-primary font-bold">💡 {t('chatbot.note', 'Nota')}:</strong> {t('chatbot.gps_warning', 'El GPS automático en computadoras puede ser impreciso.')}
                                       </p>
                                       <div className="flex flex-col gap-3">
                                         <Button 
@@ -810,12 +812,12 @@ export default function Chatbot() {
                                           className="w-full bg-primary/20 text-primary hover:bg-primary/30 border border-primary/50 text-xs font-bold transition-all"
                                         >
                                           {isLocating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MapPin className="h-4 w-4 mr-2" />}
-                                          Usar GPS Automático
+                                          {t('chatbot.auto_gps', 'Usar GPS Automático')}
                                         </Button>
                                         
                                         <div className="flex gap-2 items-center">
                                           <div className="h-[1px] flex-1 bg-border/50"></div>
-                                          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">O ingresa manualmente</span>
+                                          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{t('chatbot.or_manual', 'O ingresa manualmente')}</span>
                                           <div className="h-[1px] flex-1 bg-border/50"></div>
                                         </div>
 
@@ -834,7 +836,7 @@ export default function Chatbot() {
                                             disabled={!manualLocationInput.trim() || isLoading || isLocating}
                                             className="h-8 px-3 text-xs bg-primary text-black hover:bg-primary/80"
                                           >
-                                            Enviar
+                                            {t('chatbot.send')}
                                           </Button>
                                         </div>
                                       </div>
@@ -876,7 +878,7 @@ export default function Chatbot() {
                 <div className="p-4 bg-background/95 backdrop-blur-xl border-t border-white/5 relative z-10 flex flex-col gap-3">
                   <div className="flex items-center gap-2 px-1">
                     <MapPin className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Destino de viaje:</span>
+                    <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">{t('chatbot.destination', 'Destino de viaje:')}</span>
                     <input
                       type="text"
                       placeholder="Opcional (Ej. Cali)"

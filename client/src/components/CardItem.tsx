@@ -4,10 +4,12 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Star, Box, Eye } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import VRViewer from "./VRViewer";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
+import TranslatedText from "./TranslatedText";
 
 interface CardItemProps {
   item: LocationItem;
@@ -15,6 +17,7 @@ interface CardItemProps {
 }
 
 export default function CardItem({ item, onViewMap }: CardItemProps) {
+  const { t } = useTranslation();
   const [vrMode, setVrMode] = useState<'product' | 'interior' | null>(null);
   const [realRating, setRealRating] = useState<number>(item.rating || 0);
 
@@ -45,9 +48,7 @@ export default function CardItem({ item, onViewMap }: CardItemProps) {
         />
         <div className="absolute top-2 right-2">
            <Badge variant="secondary" className="backdrop-blur-md bg-black/70 text-white border-none font-semibold shadow-lg">
-             {item.category === 'restaurant' ? 'Restaurante' : 
-              item.category === 'hotel' ? 'Hotel' :
-              item.category === 'transport' ? 'Transporte' : 'Recreación'}
+             {t(`categories.${item.category}`)}
            </Badge>
         </div>
       </div>
@@ -61,13 +62,13 @@ export default function CardItem({ item, onViewMap }: CardItemProps) {
           </div>
         </div>
         {item.priceRange && (
-           <div className="text-sm text-muted-foreground">{item.priceRange} • {item.category}</div>
+           <div className="text-sm text-muted-foreground">{item.priceRange} • {t(`categories.${item.category}`)}</div>
         )}
       </CardHeader>
       
       <CardContent className="flex-grow">
         <p className="text-sm text-muted-foreground line-clamp-2">
-          {item.description}
+          <TranslatedText text={item.description} />
         </p>
       </CardContent>
       
@@ -81,7 +82,7 @@ export default function CardItem({ item, onViewMap }: CardItemProps) {
                 onClick={(e) => { e.stopPropagation(); setVrMode('product'); }}
              >
                <Box className="h-3 w-3" />
-               Ver Producto 3D
+               {t('home.3d_model', 'Ver Producto 3D')}
              </Button>
             <Dialog open={vrMode === 'product'} onOpenChange={(open) => !open && setVrMode(null)}>
               <DialogContent 
@@ -102,7 +103,7 @@ export default function CardItem({ item, onViewMap }: CardItemProps) {
                 onClick={(e) => { e.stopPropagation(); setVrMode('interior'); }}
              >
                <Eye className="h-3 w-3" />
-               Ver Interior VR
+               {t('home.virtual_tour', 'Ver Interior VR')}
              </Button>
             <Dialog open={vrMode === 'interior'} onOpenChange={(open) => !open && setVrMode(null)}>
               <DialogContent 
@@ -119,7 +120,7 @@ export default function CardItem({ item, onViewMap }: CardItemProps) {
         )}
         <Button className="w-full gap-2" onClick={(e) => { e.stopPropagation(); if (onViewMap) onViewMap(); }}>
            <MapPin className="h-4 w-4" />
-           Ver en Mapa
+           {t('home.explore_btn', 'Ver en Mapa')}
         </Button>
       </CardFooter>
     </Card>

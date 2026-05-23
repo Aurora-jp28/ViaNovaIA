@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Star, Trash2 } from 'lucide-react';
+import TranslatedText from "./TranslatedText";
+import { useTranslation } from "react-i18next";
 
 interface CommentItem {
   id: string;
@@ -18,6 +20,7 @@ interface CommentItem {
 export default function Comments({ locationId }: { locationId: string }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -55,7 +58,7 @@ export default function Comments({ locationId }: { locationId: string }) {
 
   const handleSubmit = async () => {
     if (!content.trim()) {
-      toast({ title: 'Contenido requerido', description: 'Escribe un comentario antes de enviar.' });
+      toast({ title: t('comments.required_title', 'Contenido requerido'), description: t('comments.required_desc', 'Escribe un comentario antes de enviar.') });
       return;
     }
     try {
@@ -76,7 +79,7 @@ export default function Comments({ locationId }: { locationId: string }) {
       setComments(prev => [data.comment, ...prev]);
       setContent('');
       setRating(5);
-      toast({ title: 'Comentario publicado', description: 'Gracias por tu aporte.' });
+      toast({ title: t('comments.success_title', 'Comentario publicado'), description: t('comments.success_desc', 'Gracias por tu aporte.') });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message || 'No se pudo enviar el comentario', variant: 'destructive' });
     } finally {
@@ -93,7 +96,7 @@ export default function Comments({ locationId }: { locationId: string }) {
       });
       if (!res.ok) throw new Error('No se pudo eliminar el comentario');
       setComments(prev => prev.filter(c => c.id !== id));
-      toast({ title: 'Comentario eliminado', description: 'Tu reseña ha sido borrada.' });
+      toast({ title: t('comments.deleted_title', 'Comentario eliminado'), description: t('comments.deleted_desc', 'Tu reseña ha sido borrada.') });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
@@ -103,7 +106,7 @@ export default function Comments({ locationId }: { locationId: string }) {
     <Card className="bg-card/50 border-border/50">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-bold">Reseñas y Comentarios</CardTitle>
+          <CardTitle className="text-lg font-bold">{t('comments.title', 'Reseñas y Comentarios')}</CardTitle>
           {avgRating && (
             <div className="flex items-center gap-1 text-amber-400" title="Calificación promedio">
               <Star className="h-4 w-4 fill-current" />
@@ -116,7 +119,7 @@ export default function Comments({ locationId }: { locationId: string }) {
         {/* Formulario */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold mr-2">Tu calificación:</span>
+            <span className="text-sm font-semibold mr-2">{t('comments.your_rating', 'Tu calificación:')}</span>
             <div className="flex items-center gap-1" onMouseLeave={() => setHoverRating(0)}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star
@@ -135,13 +138,13 @@ export default function Comments({ locationId }: { locationId: string }) {
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Comparte tu experiencia..."
+            placeholder={t('comments.placeholder', 'Comparte tu experiencia...')}
             className="bg-background/50"
             rows={3}
           />
           <div className="flex justify-end">
             <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Enviando...' : 'Publicar comentario'}
+              {submitting ? t('comments.submitting', 'Enviando...') : t('comments.submit_btn', 'Publicar comentario')}
             </Button>
           </div>
         </div>
@@ -149,9 +152,9 @@ export default function Comments({ locationId }: { locationId: string }) {
         {/* Listado */}
         <div className="space-y-3">
           {loading ? (
-            <div className="text-sm text-muted-foreground">Cargando comentarios...</div>
+            <div className="text-sm text-muted-foreground">{t('comments.loading', 'Cargando comentarios...')}</div>
           ) : comments.length === 0 ? (
-            <div className="text-sm text-muted-foreground">Sé el primero en comentar.</div>
+            <div className="text-sm text-muted-foreground">{t('comments.empty', 'Sé el primero en comentar.')}</div>
           ) : (
             comments.map((c) => (
               <div key={c.id} className="rounded-md border border-border/50 p-3 bg-background/40">
@@ -170,7 +173,9 @@ export default function Comments({ locationId }: { locationId: string }) {
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-foreground/90 whitespace-pre-wrap">{c.content}</p>
+                <p className="text-sm text-foreground/90 whitespace-pre-wrap">
+                  <TranslatedText text={c.content} />
+                </p>
                 {c.createdAt && (
                   <div className="text-[10px] text-muted-foreground mt-1">
                     {new Date(c.createdAt).toLocaleString()}

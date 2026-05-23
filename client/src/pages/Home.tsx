@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 
 import Chatbot from "@/components/Chatbot";
+import TranslatedText from "@/components/TranslatedText";
 import ProviderDashboard from "@/pages/ProviderDashboard";
 import TaxiOrderPanel, { type SimulatedTaxi } from "@/components/TaxiOrderPanel";
 
@@ -90,7 +91,7 @@ const HeroSection = ({ children }: { children?: React.ReactNode }) => {
 };
 
 export default function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, isAuthenticated, loading } = useAuth();
   const [_, setLocation] = useLocation();
 
@@ -135,15 +136,29 @@ export default function Home() {
   const handleNavigateToLocation = async () => {
     if (!selectedItem || !selectedItem.coordinates) return;
     
-    // Obtener ubicación si no existe
+    const [destLat, destLng] = selectedItem.coordinates;
+    
+    // Check if destination coords are valid (not 0,0)
+    if (!destLat && !destLng) {
+      // Fallback: open Google Maps search by name
+      const q = encodeURIComponent(selectedItem.name);
+      window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
+      return;
+    }
+    
+    // Get user location if not available
     let currentLoc = userLoc;
     if (!currentLoc) {
       try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+        const pos = await new Promise<GeolocationPosition>((res, rej) => 
+          navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10000 })
+        );
         currentLoc = [pos.coords.latitude, pos.coords.longitude];
         setUserLoc(currentLoc);
       } catch (e) {
-        alert("Necesitamos tu ubicación para guiarte.");
+        // Fallback: open Google Maps directions without origin
+        const q = encodeURIComponent(selectedItem.name);
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&destination_place_id=${q}`, '_blank');
         return;
       }
     }
@@ -167,15 +182,26 @@ export default function Home() {
 
         // TTS Instruction
         if ('speechSynthesis' in window) {
+          const langMap: Record<string, string> = { es: 'es-CO', en: 'en-US', fr: 'fr-FR', pt: 'pt-BR', zh: 'zh-CN' };
           const msg = new SpeechSynthesisUtterance();
-          msg.text = `Calculando ruta a ${selectedItem.name}. La distancia es de ${(route.distance / 1000).toFixed(1)} kilómetros. El tiempo estimado es de ${Math.round(route.duration / 60)} minutos. Gira a la derecha en la próxima intersección y sigue la línea azul en el mapa.`;
-          msg.lang = 'es-CO';
+          msg.text = t('home.nav_tts', 'Calculando ruta a {{name}}. La distancia es de {{dist}} kilómetros. Tiempo estimado: {{time}} minutos.', {
+            name: selectedItem.name,
+            dist: (route.distance / 1000).toFixed(1),
+            time: Math.round(route.duration / 60)
+          });
+          msg.lang = langMap[i18n.language] || 'es-CO';
           msg.rate = 1.0;
           window.speechSynthesis.speak(msg);
         }
+      } else {
+        // OSRM couldn't calculate route — open Google Maps as fallback
+        window.open(`https://www.google.com/maps/dir/?api=1&origin=${start[0]},${start[1]}&destination=${end[0]},${end[1]}`, '_blank');
       }
     } catch (e) {
       console.error("Error fetching route:", e);
+      // On any error, open Google Maps as fallback
+      const start = currentLoc!;
+      window.open(`https://www.google.com/maps/dir/?api=1&origin=${start[0]},${start[1]}&destination=${destLat},${destLng}`, '_blank');
     }
   };
 
@@ -432,14 +458,14 @@ export default function Home() {
                       {filteredAll.length > displayLimit && (
                         <div className="col-span-1 sm:col-span-2 text-center pt-8 flex flex-col items-center">
                           <p className="opacity-60 text-sm mb-4">
-                            Mostrando {displayLimit} de {filteredAll.length} resultados. Usa los filtros para refinar tu búsqueda.
+                            {t('home.showing_results', 'Mostrando {{limit}} de {{total}} resultados. Usa los filtros para refinar tu búsqueda.', { limit: displayLimit, total: filteredAll.length })}
                           </p>
                           <Button 
                             variant="outline" 
                             onClick={() => setDisplayLimit(prev => prev + 40)}
                             className="rounded-full border-primary/50 text-primary hover:bg-primary/10"
                           >
-                            Ver más resultados
+                            {t('home.load_more', 'Ver más resultados')}
                           </Button>
                         </div>
                       )}
@@ -480,7 +506,7 @@ export default function Home() {
 
               <div className="absolute top-6 left-6 z-20">
                 <Button variant="secondary" onClick={handleBackToLanding} className="gap-2 bg-background/60 backdrop-blur hover:bg-background rounded-full pl-3 pr-6 transition-all hover:scale-105">
-                  <ArrowLeft className="h-4 w-4" /> Volver a Explorar
+                  <ArrowLeft className="h-4 w-4" /> {t('home.back')}
                 </Button>
               </div>
             </div>
@@ -493,7 +519,7 @@ export default function Home() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <Badge className="bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-widest text-xs mb-3">
-                        {selectedItem?.category}
+                        {selectedItem ? t(`categories.${selectedItem.category}`) : ''}
                       </Badge>
                       <h1 className="text-4xl md:text-5xl font-heading font-extrabold text-foreground">{selectedItem?.name}</h1>
                     </div>
@@ -506,7 +532,7 @@ export default function Home() {
                   </div>
 
                   <p className="text-muted-foreground/90 text-lg leading-relaxed mb-6 font-light">
-                    {selectedItem?.description}
+                    <TranslatedText text={selectedItem?.description || ''} />
                   </p>
 
                   {/* Restaurant inside a hotel */}
