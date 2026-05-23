@@ -168,11 +168,20 @@ export default function Chatbot() {
     setIsSpeaking(true);
 
     try {
-      // Edge TTS – Microsoft Neural Voice (es-CO-SalomeNeural / colombiana)
+      const edgeVoices: Record<string, string> = {
+        es: 'es-CO-SalomeNeural',
+        en: 'en-US-AriaNeural',
+        fr: 'fr-FR-DeniseNeural',
+        pt: 'pt-BR-FranciscaNeural',
+        zh: 'zh-CN-XiaoxiaoNeural'
+      };
+      const selectedVoice = edgeVoices[i18n.language] || 'es-CO-SalomeNeural';
+
+      // Edge TTS – Microsoft Neural Voice
       const res = await fetch(apiBase + '/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanText, voice: 'es-CO-SalomeNeural' })
+        body: JSON.stringify({ text: cleanText, voice: selectedVoice })
       });
 
       if (!res.ok) throw new Error('TTS request failed');
@@ -213,7 +222,8 @@ export default function Chatbot() {
       try {
         const synth = window.speechSynthesis;
         const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.lang = 'es-CO';
+        const langMap: Record<string, string> = { es: 'es-CO', en: 'en-US', fr: 'fr-FR', pt: 'pt-BR', zh: 'zh-CN' };
+        utterance.lang = langMap[i18n.language] || 'es-CO';
         utterance.rate = 1.05;
         utterance.pitch = 1.1;
         utterance.onstart = () => {
@@ -645,17 +655,16 @@ export default function Chatbot() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] -mr-10 -mt-10 rounded-full" />
                 <div className="flex items-center gap-3 relative z-10">
                   <div className="relative">
-                    <Avatar className="h-12 w-12 border-2 border-primary/50 shadow-lg ring-2 ring-background bg-card p-1">
-                      <AvatarImage src={botLogo} alt="VIANova Bot" className="object-contain" />
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-yellow-600 text-black">
-                        <Bot className="h-6 w-6" />
-                      </AvatarFallback>
+                    <Avatar className="h-12 w-12 border-0 shadow-[0_0_15px_rgba(251,191,36,0.6)] ring-2 ring-primary/40 bg-gradient-to-br from-primary via-amber-400 to-orange-500 p-[2px]">
+                      <div className="w-full h-full bg-black/80 rounded-full flex items-center justify-center">
+                        <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+                      </div>
                     </Avatar>
                     <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-background animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]" />
                   </div>
                   <div>
                     <h3 className="font-heading font-extrabold text-foreground text-lg tracking-tight">VIANova AI</h3>
-                    <p className="text-xs text-primary/80 font-medium tracking-wide">Impulsado por Groq {isVoiceMode && "& Edge TTS 🇨🇴"}</p>
+                    <p className="text-xs text-primary/80 font-medium tracking-wide">Impulsado por Llama 3.1 {isVoiceMode && "& Kokoro TTS"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 relative z-10">
@@ -772,9 +781,10 @@ export default function Chatbot() {
                                 className={`flex gap-3 items-end ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                               >
                                 {msg.role === 'assistant' && (
-                                  <Avatar className="h-8 w-8 shrink-0 shadow-md bg-card p-0.5">
-                                    <AvatarImage src={botLogo} className="object-contain" />
-                                    <AvatarFallback className="bg-primary/20 text-primary border border-primary/30"><Bot className="h-4 w-4" /></AvatarFallback>
+                                  <Avatar className="h-8 w-8 shrink-0 shadow-[0_0_10px_rgba(251,191,36,0.4)] bg-gradient-to-br from-primary via-amber-400 to-orange-500 p-[2px]">
+                                    <div className="w-full h-full bg-black/80 rounded-full flex items-center justify-center">
+                                      <Sparkles className="h-4 w-4 text-primary" />
+                                    </div>
                                   </Avatar>
                                 )}
                                 <div
@@ -853,8 +863,10 @@ export default function Chatbot() {
                                animate={{ opacity: 1, y: 0 }}
                                className="flex gap-3 items-end"
                              >
-                               <Avatar className="h-8 w-8 shrink-0 shadow-md">
-                                  <AvatarFallback className="bg-primary/20 text-primary border border-primary/30"><Bot className="h-4 w-4" /></AvatarFallback>
+                               <Avatar className="h-8 w-8 shrink-0 shadow-[0_0_10px_rgba(251,191,36,0.4)] bg-gradient-to-br from-primary via-amber-400 to-orange-500 p-[2px]">
+                                  <div className="w-full h-full bg-black/80 rounded-full flex items-center justify-center">
+                                    <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                                  </div>
                                </Avatar>
                                <div className="bg-secondary/40 backdrop-blur-md border border-white/5 rounded-2xl rounded-bl-sm p-4 flex items-center gap-2 shadow-sm">
                                  <div className="flex gap-1 items-center justify-center">

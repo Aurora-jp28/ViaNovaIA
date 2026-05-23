@@ -67,13 +67,13 @@ if (typeof document !== 'undefined' && !document.getElementById('vianova-marker-
   document.head.appendChild(style);
 }
 
-function makeCategoryIcon(emoji: string, color: string, isSelected: boolean) {
-  const size = isSelected ? 48 : 34;
-  // Outer ring wrapper is only rendered for the selected marker
+function makeCategoryIcon(svgPath: string, color: string, isSelected: boolean) {
+  const size = isSelected ? 48 : 36;
+  const innerSize = isSelected ? 24 : 18;
   const pulseRing = isSelected
     ? `<div style="
         position:absolute;
-        inset:-10px;
+        inset:-12px;
         border:3px solid ${color};
         border-radius:50%;
         animation: vianova-ring-pulse 2s ease-out infinite;
@@ -82,9 +82,19 @@ function makeCategoryIcon(emoji: string, color: string, isSelected: boolean) {
     : '';
 
   const bounce = isSelected ? 'animation: vianova-bounce 1.4s ease-in-out 1;' : '';
-  const glow = isSelected
-    ? `box-shadow:0 0 0 4px ${color}60, 0 0 20px ${color}90, 0 4px 12px rgba(0,0,0,0.3);`
-    : '';
+  const filter = isSelected ? `drop-shadow(0px 8px 12px rgba(0,0,0,0.4))` : `drop-shadow(0px 4px 6px rgba(0,0,0,0.3))`;
+
+  // Custom teardrop pin SVG
+  const pinSvg = `
+    <svg viewBox="0 0 24 24" width="${size}" height="${size}" style="filter: ${filter}; transition: all 0.3s;">
+      <path fill="${color}" stroke="#ffffff" stroke-width="1.5" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+      <g transform="translate(${12 - innerSize/2}, ${9 - innerSize/2})">
+        <svg width="${innerSize}" height="${innerSize}" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          ${svgPath}
+        </svg>
+      </g>
+    </svg>
+  `;
 
   return L.divIcon({
     className: '',
@@ -93,35 +103,30 @@ function makeCategoryIcon(emoji: string, color: string, isSelected: boolean) {
       width:${size}px;height:${size}px;
       display:flex;align-items:center;justify-content:center;
       ${bounce}
+      cursor:pointer;
+      z-index: ${isSelected ? 1000 : 2};
     ">
       ${pulseRing}
-      <div style="
-        width:${size}px;height:${size}px;
-        display:flex;align-items:center;justify-content:center;
-        background:${color};
-        border-radius:50%;
-        border:${isSelected ? 3 : 2}px solid #fff;
-        font-size:${isSelected ? 22 : 16}px;
-        ${glow}
-        transition:all 0.3s;
-        cursor:pointer;
-        position:relative;
-        z-index:2;
-      ">${emoji}</div>
+      ${pinSvg}
     </div>`,
     iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2 - 4],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size],
   });
 }
 
 function iconFor(cat: LocationItem['category'], isSelected: boolean) {
   switch (cat) {
-    case 'hotel': return makeCategoryIcon('🏨', '#7c3aed', isSelected);
-    case 'restaurant': return makeCategoryIcon('🍽️', '#ea580c', isSelected);
-    case 'recreation': return makeCategoryIcon('🎡', '#16a34a', isSelected);
-    case 'transport': return makeCategoryIcon('🚖', '#ca8a04', isSelected);
-    default: return DefaultIcon;
+    case 'hotel': 
+      return makeCategoryIcon('<path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h6M9 11h6M9 15h6"/>', '#7c3aed', isSelected);
+    case 'restaurant': 
+      return makeCategoryIcon('<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 2v11c0 1.1-.9 2-2 2h-1v7M21 2c-2.2 0-4 1.8-4 4v5h4V2z"/>', '#ea580c', isSelected);
+    case 'recreation': 
+      return makeCategoryIcon('<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>', '#16a34a', isSelected);
+    case 'transport': 
+      return makeCategoryIcon('<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2M7 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>', '#ca8a04', isSelected);
+    default: 
+      return DefaultIcon;
   }
 }
 
