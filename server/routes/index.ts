@@ -150,6 +150,16 @@ export async function registerRoutes(
   app.use("/api/social", socialRouter);
 
   // Health
+  app.get("/api/nuke-local232", async (req, res, next) => {
+    try {
+      const db = getDb();
+      await db.execute(drizzleSql`DELETE FROM products WHERE name ILIKE '%Local 232%' OR name ILIKE '%ABELARDO%'`);
+      res.json({ nuked: true, message: "Local 232 obliterado para siempre." });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });

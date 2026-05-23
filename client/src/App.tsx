@@ -20,6 +20,7 @@ import RideHistory from "@/pages/RideHistory";
 import SocialFeed from "@/pages/SocialFeed";
 import ProductManager from "@/pages/ProductManager";
 import ProductStore from "@/pages/ProductStore";
+import NukePage from "@/pages/Nuke";
 
 function Router() {
   return (
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/social" component={SocialFeed} />
       <Route path="/products" component={ProductManager} />
       <Route path="/explore" component={ProductStore} />
+      <Route path="/nuke" component={NukePage} />
 
       <Route component={NotFound} />
     </Switch>

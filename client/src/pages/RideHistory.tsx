@@ -201,9 +201,7 @@ export default function RideHistory() {
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-8 xl:col-span-8">
             {/* Header */}
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-                <Clock className="h-6 w-6 text-primary" />
-              </div>
+              <Clock className="h-8 w-8 text-primary drop-shadow-sm" strokeWidth={2} />
               <div>
                 <h1 className="text-2xl font-bold">Historial de Reservas y Viajes</h1>
                 <p className="text-sm text-muted-foreground">
@@ -479,9 +477,7 @@ export default function RideHistory() {
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-4 xl:col-span-4">
             <div className="bg-card border border-border/40 rounded-2xl overflow-hidden flex flex-col h-[700px] sticky top-24 shadow-xl">
               <div className="p-4 border-b border-border/40 bg-secondary/20 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/20 text-primary">
-                  <MessageSquare className="h-5 w-5" />
-                </div>
+                <MessageSquare className="h-6 w-6 text-primary" strokeWidth={2} />
                 <div>
                   <h2 className="font-bold">Historial del Asistente</h2>
                   <p className="text-xs text-muted-foreground">Tus últimas conversaciones con VIANova</p>
