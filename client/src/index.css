@@ -176,9 +176,3 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
-
-/* Ocultar barra y popups de Google Translate */
-body { top: 0 !important; }
-.skiptranslate iframe, .goog-te-banner-frame, .goog-te-balloon-frame, #goog-gt-tt { display: none !important; visibility: hidden !important; }
-.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
-#google_translate_element { display: none !important; }

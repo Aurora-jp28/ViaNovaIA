@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import TranslatedText from "@/components/TranslatedText";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 interface Post {
@@ -178,7 +179,7 @@ function PostCard({ post, currentUser, onDelete }: { post: Post; currentUser: st
 
       {/* Caption */}
       {post.caption && (
-        <p className="px-5 pb-3 text-sm leading-relaxed text-foreground/90">{post.caption}</p>
+        <p className="px-5 pb-3 text-sm leading-relaxed text-foreground/90"><TranslatedText text={post.caption} /></p>
       )}
 
       {/* Media */}

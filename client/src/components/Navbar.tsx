@@ -4,7 +4,6 @@ import { LogOut, User, Settings, Package, Building2, Utensils, TentTree, Car, Cl
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import TranslatedText from "@/components/TranslatedText";
 // Logos sin fondo (para el Navbar)
 import logoPrincipal from "../assets/Logo_principal-removebg-preview.png";
 import logoOcean   from "../assets/Logo_ocean-removebg-preview.png";
@@ -36,13 +35,6 @@ export default function Navbar() {
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
-    
-    // Trigger Google Translate Widget if present
-    const gtSelect = document.querySelector('.goog-te-combo') as HTMLSelectElement;
-    if (gtSelect) {
-      gtSelect.value = lng;
-      gtSelect.dispatchEvent(new Event('change'));
-    }
   };
 
   // Seleccionar logo según el tema activo
@@ -119,12 +111,12 @@ export default function Navbar() {
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
-      case 'hotel': return <TranslatedText text="Hotel" />;
-      case 'restaurant': return <TranslatedText text="Restaurante" />;
-      case 'recreation': return <TranslatedText text="Recreación" />;
-      case 'taxi': return <TranslatedText text="Taxista" />;
-      case 'translator': return <TranslatedText text="Traductor" />;
-      default: return <TranslatedText text="Viajero" />;
+      case 'hotel': return t('navbar.role_hotel');
+      case 'restaurant': return t('navbar.role_restaurant');
+      case 'recreation': return t('navbar.role_recreation');
+      case 'taxi': return t('navbar.role_taxi');
+      case 'translator': return t('navbar.role_translator');
+      default: return t('navbar.role_traveler');
     }
   };
 
@@ -197,11 +189,11 @@ export default function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Languages className="h-5 w-5" />
-                  <span className="sr-only"><TranslatedText text="Cambiar idioma" /></span>
+                  <span className="sr-only">{t('navbar.change_language')}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-card border-border">
-                <DropdownMenuLabel><TranslatedText text="Idioma / Language" /></DropdownMenuLabel>
+                <DropdownMenuLabel>{t('navbar.language')}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => changeLanguage('es')} className="cursor-pointer gap-2">
                   Español {i18n.language === 'es' && "✓"}
@@ -226,17 +218,17 @@ export default function Navbar() {
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                   <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                  <span className="sr-only"><TranslatedText text="Cambiar tema" /></span>
+                  <span className="sr-only">{t('navbar.change_theme')}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-card border-border">
-                <DropdownMenuLabel><TranslatedText text="Apariencia" /></DropdownMenuLabel>
+                <DropdownMenuLabel>{t('navbar.appearance')}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setTheme('light')} className="cursor-pointer gap-2">
-                  <Sun className="h-4 w-4" /> <TranslatedText text="Claro" />
+                  <Sun className="h-4 w-4" /> {t('navbar.light')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme('dark')} className="cursor-pointer gap-2">
-                  <Moon className="h-4 w-4" /> <TranslatedText text="Oscuro" />
+                  <Moon className="h-4 w-4" /> {t('navbar.dark')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme('sunset')} className="cursor-pointer gap-2">
                   <span className="w-4 h-4 rounded-full bg-orange-400" /> Sunset
@@ -292,7 +284,7 @@ export default function Navbar() {
                   
                   <DropdownMenuItem onClick={() => setLocation("/settings")} className="cursor-pointer gap-2">
                     <Settings className="h-4 w-4" />
-                    Configuración de Cuenta
+                    {t('navbar.settings', 'Configuración de Cuenta')}
                   </DropdownMenuItem>
 
                   <DropdownMenuItem onClick={() => setLocation("/social")} className="cursor-pointer gap-2">
@@ -302,34 +294,34 @@ export default function Navbar() {
 
                   <DropdownMenuItem onClick={() => setLocation("/ride-history")} className="cursor-pointer gap-2">
                     <Clock className="h-4 w-4 text-primary" />
-                    Historial de Viajes
+                    {t('navbar.history', 'Historial de Viajes')}
                   </DropdownMenuItem>
                   
                   {isProvider && (
                     <DropdownMenuItem onClick={() => setLocation("/products")} className="cursor-pointer gap-2">
                       <Package className="h-4 w-4 text-primary" />
-                      Mis Productos
+                      {t('navbar.products', 'Mis Productos')}
                     </DropdownMenuItem>
                   )}
 
                   {user.role === 'taxi' && (
                     <DropdownMenuItem onClick={() => setLocation("/taxi-dashboard")} className="cursor-pointer gap-2">
                       <Car className="h-4 w-4 text-yellow-400" />
-                      Panel de Taxista
+                      {t('navbar.taxi_panel', 'Panel de Taxista')}
                     </DropdownMenuItem>
                   )}
 
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer gap-2">
                     <LogOut className="h-4 w-4" />
-                    Cerrar Sesión
+                    {t('navbar.logout', 'Cerrar Sesión')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           ) : (
             <Link href="/login">
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">Iniciar Sesión</Button>
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">{t('navbar.login', 'Iniciar Sesión')}</Button>
             </Link>
           )}
         </div>

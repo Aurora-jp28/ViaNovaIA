@@ -6,7 +6,10 @@ const resources = {
   es: {
     translation: {
       navbar: {
-        explore: "Explorar", messages: "Mensajes", social: "Social", admin: "Admin", business: "Mi Negocio", taxi: "Modo Taxi", theme: "Tema", profile: "Perfil", logout: "Cerrar sesión"
+        explore: "Explorar", messages: "Mensajes", social: "Social", admin: "Admin", business: "Mi Negocio", taxi: "Modo Taxi", theme: "Tema", profile: "Perfil", logout: "Cerrar Sesión",
+        settings: "Configuración de Cuenta", history: "Historial de Viajes", products: "Mis Productos", taxi_panel: "Panel de Taxista", login: "Iniciar Sesión",
+        appearance: "Apariencia", light: "Claro", dark: "Oscuro", language: "Idioma", change_language: "Cambiar idioma", change_theme: "Cambiar tema",
+        role_hotel: "Hotel", role_restaurant: "Restaurante", role_recreation: "Recreación", role_taxi: "Taxista", role_translator: "Traductor", role_traveler: "Viajero"
       },
       home: {
         hero_title: "Descubre el mundo con", hero_subtitle: "Explora los destinos más exclusivos, sabores inolvidables y experiencias inmersivas impulsadas por inteligencia artificial.",
@@ -49,7 +52,10 @@ const resources = {
   en: {
     translation: {
       navbar: {
-        explore: "Explore", messages: "Messages", social: "Social", admin: "Admin", business: "My Business", taxi: "Taxi Mode", theme: "Theme", profile: "Profile", logout: "Sign Out"
+        explore: "Explore", messages: "Messages", social: "Social", admin: "Admin", business: "My Business", taxi: "Taxi Mode", theme: "Theme", profile: "Profile", logout: "Sign Out",
+        settings: "Account Settings", history: "Trip History", products: "My Products", taxi_panel: "Taxi Panel", login: "Sign In",
+        appearance: "Appearance", light: "Light", dark: "Dark", language: "Language", change_language: "Change language", change_theme: "Change theme",
+        role_hotel: "Hotel", role_restaurant: "Restaurant", role_recreation: "Recreation", role_taxi: "Taxi Driver", role_translator: "Translator", role_traveler: "Traveler"
       },
       home: {
         hero_title: "Discover the world with", hero_subtitle: "Explore the most exclusive destinations, unforgettable flavors, and immersive AI-powered experiences.",
@@ -92,7 +98,10 @@ const resources = {
   fr: {
     translation: {
       navbar: {
-        explore: "Explorer", messages: "Messages", social: "Social", admin: "Admin", business: "Mon Entreprise", taxi: "Mode Taxi", theme: "Thème", profile: "Profil", logout: "Déconnexion"
+        explore: "Explorer", messages: "Messages", social: "Social", admin: "Admin", business: "Mon Entreprise", taxi: "Mode Taxi", theme: "Thème", profile: "Profil", logout: "Déconnexion",
+        settings: "Paramètres du Compte", history: "Historique de Voyages", products: "Mes Produits", taxi_panel: "Panneau Taxi", login: "Connexion",
+        appearance: "Apparence", light: "Clair", dark: "Sombre", language: "Langue", change_language: "Changer de langue", change_theme: "Changer de thème",
+        role_hotel: "Hôtel", role_restaurant: "Restaurant", role_recreation: "Loisirs", role_taxi: "Chauffeur", role_translator: "Traducteur", role_traveler: "Voyageur"
       },
       home: {
         hero_title: "Découvrez le monde avec", hero_subtitle: "Explorez les destinations les plus exclusives, des saveurs inoubliables et des expériences immersives.",
@@ -135,7 +144,10 @@ const resources = {
   pt: {
     translation: {
       navbar: {
-        explore: "Explorar", messages: "Mensagens", social: "Social", admin: "Admin", business: "Meu Negócio", taxi: "Modo Táxi", theme: "Tema", profile: "Perfil", logout: "Sair"
+        explore: "Explorar", messages: "Mensagens", social: "Social", admin: "Admin", business: "Meu Negócio", taxi: "Modo Táxi", theme: "Tema", profile: "Perfil", logout: "Sair",
+        settings: "Configurações da Conta", history: "Histórico de Viagens", products: "Meus Produtos", taxi_panel: "Painel do Táxi", login: "Entrar",
+        appearance: "Aparência", light: "Claro", dark: "Escuro", language: "Idioma", change_language: "Mudar idioma", change_theme: "Mudar tema",
+        role_hotel: "Hotel", role_restaurant: "Restaurante", role_recreation: "Lazer", role_taxi: "Taxista", role_translator: "Tradutor", role_traveler: "Viajante"
       },
       home: {
         hero_title: "Descubra o mundo com", hero_subtitle: "Explore os destinos mais exclusivos, sabores inesquecíveis e experiências imersivas.",
@@ -178,7 +190,10 @@ const resources = {
   zh: {
     translation: {
       navbar: {
-        explore: "探索", messages: "消息", social: "社交", admin: "管理", business: "我的企业", taxi: "出租车", theme: "主题", profile: "个人资料", logout: "注销"
+        explore: "探索", messages: "消息", social: "社交", admin: "管理", business: "我的企业", taxi: "出租车", theme: "主题", profile: "个人资料", logout: "注销",
+        settings: "账户设置", history: "旅行记录", products: "我的产品", taxi_panel: "出租车面板", login: "登录",
+        appearance: "外观", light: "浅色", dark: "深色", language: "语言", change_language: "切换语言", change_theme: "切换主题",
+        role_hotel: "酒店", role_restaurant: "餐厅", role_recreation: "娱乐", role_taxi: "司机", role_translator: "翻译", role_traveler: "旅行者"
       },
       home: {
         hero_title: "与探索世界", hero_subtitle: "探索最独特的目的地、难忘的风味和沉浸式体验。",
