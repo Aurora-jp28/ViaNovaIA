@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import { LocationItem } from '@/data/mockData';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { MapPin } from 'lucide-react';
 import type { SimulatedTaxi } from './TaxiOrderPanel';
 
 // Fix for default markers in Leaflet with Vite/Webpack
@@ -361,7 +362,7 @@ export default function MapView({ locations, selectedCategory, onMarkerClick, se
           className="absolute z-[400] top-3 right-3 bg-background/80 backdrop-blur-md px-3 py-2 rounded-xl border border-border/50 text-xs font-medium hover:bg-background shadow-lg flex items-center gap-1.5 transition-all hover:scale-105"
           title="Centrar en mi ubicación"
         >
-          📍 Mi ubicación
+          <MapPin className="w-4 h-4 text-red-500 fill-red-500/20" /> Mi ubicación
         </button>
 
         {/* Route info overlay */}
